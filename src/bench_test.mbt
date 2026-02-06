@@ -12,7 +12,7 @@ test "bench: identical 50x50" (b : @bench.T) {
       img2.set_pixel(x, y, Color::rgba(100, 100, 100, 255))
     }
   }
-  b.bench(fn() { b.keep(pixelmatch_simple(img1, img2, 0.1)) })
+  b.bench(() => b.keep(pixelmatch_simple(img1, img2, 0.1)))
 }
 
 ///|
@@ -26,7 +26,7 @@ test "bench: identical 200x200" (b : @bench.T) {
       img2.set_pixel(x, y, Color::rgba(100, 100, 100, 255))
     }
   }
-  b.bench(fn() { b.keep(pixelmatch_simple(img1, img2, 0.1)) })
+  b.bench(() => b.keep(pixelmatch_simple(img1, img2, 0.1)))
 }
 
 ///|
@@ -40,7 +40,7 @@ test "bench: identical 500x500" (b : @bench.T) {
       img2.set_pixel(x, y, Color::rgba(100, 100, 100, 255))
     }
   }
-  b.bench(fn() { b.keep(pixelmatch_simple(img1, img2, 0.1)) })
+  b.bench(() => b.keep(pixelmatch_simple(img1, img2, 0.1)))
 }
 
 ///|
@@ -54,7 +54,7 @@ test "bench: different 200x200" (b : @bench.T) {
       img2.set_pixel(x, y, Color::rgba(255, 255, 255, 255))
     }
   }
-  b.bench(fn() { b.keep(pixelmatch_simple(img1, img2, 0.1)) })
+  b.bench(() => b.keep(pixelmatch_simple(img1, img2, 0.1)))
 }
 
 ///|
@@ -68,7 +68,7 @@ test "bench: alpha blend 200x200" (b : @bench.T) {
       img2.set_pixel(x, y, Color::rgba(150, 150, 150, 128))
     }
   }
-  b.bench(fn() { b.keep(pixelmatch_simple(img1, img2, 0.1)) })
+  b.bench(() => b.keep(pixelmatch_simple(img1, img2, 0.1)))
 }
 
 ///|
@@ -86,7 +86,7 @@ test "bench: full AA detection 100x100" (b : @bench.T) {
     }
   }
   let options = Options::default()
-  b.bench(fn() { b.keep(pixelmatch(img1, img2, None, options)) })
+  b.bench(() => b.keep(pixelmatch(img1, img2, None, options)))
 }
 
 ///|
@@ -106,7 +106,7 @@ test "bench: with output 100x100" (b : @bench.T) {
     }
   }
   let options = Options::default()
-  b.bench(fn() { b.keep(pixelmatch(img1, img2, Some(output), options)) })
+  b.bench(() => b.keep(pixelmatch(img1, img2, Some(output), options)))
 }
 
 ///|
@@ -132,7 +132,7 @@ test "bench: diff_report 100x100" (b : @bench.T) {
     }
   }
   let options = Options::default()
-  b.bench(fn() { b.keep(diff_report(img1, img2, options)) })
+  b.bench(() => b.keep(diff_report(img1, img2, options)))
 }
 
 ///|
@@ -157,7 +157,7 @@ test "bench: diff_report scattered 100x100" (b : @bench.T) {
     }
   }
   let options = Options::default()
-  b.bench(fn() { b.keep(diff_report(img1, img2, options)) })
+  b.bench(() => b.keep(diff_report(img1, img2, options)))
 }
 
 ///|
@@ -178,5 +178,5 @@ test "bench: to_text 100x100" (b : @bench.T) {
   }
   let options = Options::default()
   let report = diff_report(img1, img2, options)
-  b.bench(fn() { b.keep(report.to_text()) })
+  b.bench(() => b.keep(report.to_text()))
 }
