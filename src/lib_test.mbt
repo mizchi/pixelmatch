@@ -150,3 +150,83 @@ test "Color constructors" {
   assert_eq!(c2.b, 200)
   assert_eq!(c2.a, 255)
 }
+
+///|
+test "diff_report identical images" {
+  let img1 = Image::new(20, 20)
+  let img2 = Image::new(20, 20)
+  for y in 0..<20 {
+    for x in 0..<20 {
+      img1.set_pixel(x, y, Color::rgba(100, 100, 100, 255))
+      img2.set_pixel(x, y, Color::rgba(100, 100, 100, 255))
+    }
+  }
+  let report = diff_report(img1, img2, Options::default())
+  assert_eq!(report.diff_count, 0)
+  assert_eq!(report.match_ratio, 1.0)
+  assert_eq!(report.regions.length(), 0)
+}
+
+///|
+test "diff_report with differences" {
+  let img1 = Image::new(20, 20)
+  let img2 = Image::new(20, 20)
+  // Fill with same color
+  for y in 0..<20 {
+    for x in 0..<20 {
+      img1.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+      img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+    }
+  }
+  // Add a white square in img2
+  for y in 5..<10 {
+    for x in 5..<10 {
+      img2.set_pixel(x, y, Color::rgba(255, 255, 255, 255))
+    }
+  }
+  let report = diff_report(img1, img2, Options::default())
+  assert_eq!(report.diff_count, 25) // 5x5 = 25 pixels
+  assert_true!(report.regions.length() >= 1)
+  // Check that region covers the diff area
+  let region = report.regions[0]
+  assert_eq!(region.x, 5)
+  assert_eq!(region.y, 5)
+  assert_eq!(region.width, 5)
+  assert_eq!(region.height, 5)
+}
+
+///|
+test "diff_report to_text" {
+  let img1 = Image::new(10, 10)
+  let img2 = Image::new(10, 10)
+  for y in 0..<10 {
+    for x in 0..<10 {
+      img1.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+      img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+    }
+  }
+  // Make corner different
+  img2.set_pixel(0, 0, Color::rgba(255, 255, 255, 255))
+  let report = diff_report(img1, img2, Options::default(), grid_size=5)
+  let text = report.to_text()
+  // Check that text contains expected elements
+  assert_true!(text.contains("Diff Report"))
+  assert_true!(text.contains("10x10"))
+  assert_true!(text.contains("Different pixels: 1"))
+}
+
+///|
+test "diff_report to_json" {
+  let img1 = Image::new(10, 10)
+  let img2 = Image::new(10, 10)
+  for y in 0..<10 {
+    for x in 0..<10 {
+      img1.set_pixel(x, y, Color::rgba(50, 50, 50, 255))
+      img2.set_pixel(x, y, Color::rgba(50, 50, 50, 255))
+    }
+  }
+  let report = diff_report(img1, img2, Options::default())
+  let json = report.to_json()
+  assert_true!(json.contains("\"diff_count\": 0"))
+  assert_true!(json.contains("\"match_ratio\": 1"))
+}

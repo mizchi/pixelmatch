@@ -390,3 +390,316 @@ pub fn match_ratio(img1 : Image, img2 : Image, options : Options) -> Double {
   let diff = pixelmatch(img1, img2, None, options)
   1.0 - diff.to_double() / total.to_double()
 }
+
+// ============================================================================
+// AI-friendly Diff Report
+// ============================================================================
+
+///|
+/// Bounding box for a diff region
+pub(all) struct DiffRegion {
+  x : Int
+  y : Int
+  width : Int
+  height : Int
+  diff_pixels : Int
+}
+
+///|
+/// Comprehensive diff report for AI consumption
+pub(all) struct DiffReport {
+  // Basic statistics
+  width : Int
+  height : Int
+  total_pixels : Int
+  diff_count : Int
+  aa_count : Int
+  match_ratio : Double
+  // Grid heatmap (cell values = diff count in that cell)
+  grid : Array[Array[Int]]
+  grid_cols : Int
+  grid_rows : Int
+  // Diff regions (bounding boxes of clustered differences)
+  regions : Array[DiffRegion]
+}
+
+///|
+/// Generate a comprehensive diff report
+pub fn diff_report(
+  img1 : Image,
+  img2 : Image,
+  options : Options,
+  grid_size~ : Int = 10,
+) -> DiffReport {
+  if img1.width != img2.width || img1.height != img2.height {
+    abort("Image dimensions must match")
+  }
+  let width = img1.width
+  let height = img1.height
+  let total_pixels = width * height
+  let max_delta = 35215.0 *
+    options.threshold *
+    options.threshold *
+    options.threshold *
+    options.threshold
+  // Initialize grid
+  let grid_cols = if width < grid_size { 1 } else { grid_size }
+  let grid_rows = if height < grid_size { 1 } else { grid_size }
+  let cell_w = width / grid_cols
+  let cell_h = height / grid_rows
+  let grid : Array[Array[Int]] = []
+  for _ in 0..<grid_rows {
+    let row : Array[Int] = Array::make(grid_cols, 0)
+    grid.push(row)
+  }
+  // Collect diff pixels
+  let mut diff_count = 0
+  let mut aa_count = 0
+  let diff_map : Array[Array[Bool]] = []
+  for _ in 0..<height {
+    diff_map.push(Array::make(width, false))
+  }
+  for y in 0..<height {
+    for x in 0..<width {
+      let delta = color_delta_at(img1, img2, x, y, false)
+      if delta.abs() > max_delta {
+        if not(options.include_aa) &&
+          (is_antialiased(img1, img2, x, y) || is_antialiased(img2, img1, x, y)) {
+          aa_count += 1
+        } else {
+          diff_count += 1
+          diff_map[y][x] = true
+          // Update grid
+          let gx = if cell_w > 0 { x / cell_w } else { 0 }
+          let gy = if cell_h > 0 { y / cell_h } else { 0 }
+          let gx = if gx >= grid_cols { grid_cols - 1 } else { gx }
+          let gy = if gy >= grid_rows { grid_rows - 1 } else { gy }
+          grid[gy][gx] += 1
+        }
+      }
+    }
+  }
+  // Find connected regions using simple bounding box detection
+  let regions = find_diff_regions(diff_map, width, height)
+  let match_ratio = if total_pixels > 0 {
+    1.0 - diff_count.to_double() / total_pixels.to_double()
+  } else {
+    1.0
+  }
+  {
+    width,
+    height,
+    total_pixels,
+    diff_count,
+    aa_count,
+    match_ratio,
+    grid,
+    grid_cols,
+    grid_rows,
+    regions,
+  }
+}
+
+///|
+/// Find bounding boxes of diff regions using connected component labeling
+fn find_diff_regions(
+  diff_map : Array[Array[Bool]],
+  width : Int,
+  height : Int,
+) -> Array[DiffRegion] {
+  let visited : Array[Array[Bool]] = []
+  for _ in 0..<height {
+    visited.push(Array::make(width, false))
+  }
+  let regions : Array[DiffRegion] = []
+  for y in 0..<height {
+    for x in 0..<width {
+      if diff_map[y][x] && not(visited[y][x]) {
+        // Found unvisited diff pixel, flood fill to find region
+        let mut min_x = x
+        let mut max_x = x
+        let mut min_y = y
+        let mut max_y = y
+        let mut pixel_count = 0
+        // Simple flood fill using stack
+        let stack : Array[(Int, Int)] = [(x, y)]
+        while stack.length() > 0 {
+          let (cx, cy) = stack.pop().unwrap()
+          if cx < 0 ||
+            cx >= width ||
+            cy < 0 ||
+            cy >= height ||
+            visited[cy][cx] ||
+            not(diff_map[cy][cx]) {
+            continue
+          }
+          visited[cy][cx] = true
+          pixel_count += 1
+          if cx < min_x {
+            min_x = cx
+          }
+          if cx > max_x {
+            max_x = cx
+          }
+          if cy < min_y {
+            min_y = cy
+          }
+          if cy > max_y {
+            max_y = cy
+          }
+          // Add neighbors
+          stack.push((cx - 1, cy))
+          stack.push((cx + 1, cy))
+          stack.push((cx, cy - 1))
+          stack.push((cx, cy + 1))
+        }
+        if pixel_count > 0 {
+          regions.push({
+            x: min_x,
+            y: min_y,
+            width: max_x - min_x + 1,
+            height: max_y - min_y + 1,
+            diff_pixels: pixel_count,
+          })
+        }
+      }
+    }
+  }
+  regions
+}
+
+///|
+/// Convert DiffReport to AI-readable text format
+pub fn DiffReport::to_text(self : DiffReport) -> String {
+  let mut s = "=== Diff Report ===\n"
+  // Summary
+  s += "Summary:\n"
+  s += "  Image size: " +
+    self.width.to_string() +
+    "x" +
+    self.height.to_string() +
+    "\n"
+  s += "  Total pixels: " + self.total_pixels.to_string() + "\n"
+  s += "  Different pixels: " + self.diff_count.to_string() + "\n"
+  s += "  Anti-aliased pixels: " + self.aa_count.to_string() + "\n"
+  let pct = (self.match_ratio * 100.0).to_int()
+  s += "  Match ratio: " + pct.to_string() + "%\n"
+  // Verdict
+  s += "\nVerdict: "
+  if self.diff_count == 0 {
+    s += "IDENTICAL\n"
+  } else if self.match_ratio > 0.99 {
+    s += "NEARLY_IDENTICAL (minor differences)\n"
+  } else if self.match_ratio > 0.95 {
+    s += "SIMILAR (small differences)\n"
+  } else if self.match_ratio > 0.8 {
+    s += "DIFFERENT (moderate differences)\n"
+  } else {
+    s += "VERY_DIFFERENT (major differences)\n"
+  }
+  // Grid heatmap
+  s += "\nHeatmap (" +
+    self.grid_cols.to_string() +
+    "x" +
+    self.grid_rows.to_string() +
+    " grid):\n"
+  // Find max for normalization
+  let mut max_val = 1
+  for row in self.grid {
+    for val in row {
+      if val > max_val {
+        max_val = val
+      }
+    }
+  }
+  // Header
+  s += "  "
+  for i in 0..<self.grid_cols {
+    s += (i % 10).to_string()
+  }
+  s += "\n"
+  // Rows
+  for row_idx, row in self.grid {
+    s += (row_idx % 10).to_string() + " "
+    for val in row {
+      let intensity = val.to_double() / max_val.to_double()
+      let ch = if val == 0 {
+        "."
+      } else if intensity < 0.25 {
+        "░"
+      } else if intensity < 0.5 {
+        "▒"
+      } else if intensity < 0.75 {
+        "▓"
+      } else {
+        "█"
+      }
+      s += ch
+    }
+    s += "\n"
+  }
+  // Regions
+  if self.regions.length() > 0 {
+    s += "\nDiff Regions (" + self.regions.length().to_string() + "):\n"
+    for i, region in self.regions {
+      s += "  [" + i.to_string() + "] "
+      s += "pos=(" +
+        region.x.to_string() +
+        "," +
+        region.y.to_string() +
+        ") "
+      s += "size=" +
+        region.width.to_string() +
+        "x" +
+        region.height.to_string() +
+        " "
+      s += "pixels=" + region.diff_pixels.to_string() + "\n"
+    }
+  }
+  s
+}
+
+///|
+/// Convert DiffReport to JSON string
+pub fn DiffReport::to_json(self : DiffReport) -> String {
+  let mut s = "{\n"
+  s += "  \"width\": " + self.width.to_string() + ",\n"
+  s += "  \"height\": " + self.height.to_string() + ",\n"
+  s += "  \"total_pixels\": " + self.total_pixels.to_string() + ",\n"
+  s += "  \"diff_count\": " + self.diff_count.to_string() + ",\n"
+  s += "  \"aa_count\": " + self.aa_count.to_string() + ",\n"
+  s += "  \"match_ratio\": " + self.match_ratio.to_string() + ",\n"
+  // Grid
+  s += "  \"grid\": [\n"
+  for row_idx, row in self.grid {
+    s += "    ["
+    for col_idx, val in row {
+      s += val.to_string()
+      if col_idx < row.length() - 1 {
+        s += ", "
+      }
+    }
+    s += "]"
+    if row_idx < self.grid.length() - 1 {
+      s += ","
+    }
+    s += "\n"
+  }
+  s += "  ],\n"
+  // Regions
+  s += "  \"regions\": [\n"
+  for i, region in self.regions {
+    s += "    {\"x\": " + region.x.to_string()
+    s += ", \"y\": " + region.y.to_string()
+    s += ", \"width\": " + region.width.to_string()
+    s += ", \"height\": " + region.height.to_string()
+    s += ", \"diff_pixels\": " + region.diff_pixels.to_string() + "}"
+    if i < self.regions.length() - 1 {
+      s += ","
+    }
+    s += "\n"
+  }
+  s += "  ]\n"
+  s += "}"
+  s
+}
