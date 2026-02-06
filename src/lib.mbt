@@ -173,6 +173,7 @@ pub fn pixelmatch(
 
 ///|
 /// Calculate color delta between two pixels using YIQ color space
+/// Optimized: inline alpha blending
 fn color_delta(
   r1 : Int,
   g1 : Int,
@@ -184,21 +185,27 @@ fn color_delta(
   a2 : Int,
   y_only : Bool,
 ) -> Double {
-  // Handle alpha
-  let (r1, g1, b1) = if a1 == a2 && a1 == 255 {
-    (r1.to_double(), g1.to_double(), b1.to_double())
+  // Handle alpha - need to blend both when either is non-opaque or they differ
+  let (rf1, gf1, bf1, rf2, gf2, bf2) : (Double, Double, Double, Double, Double, Double) = if a1 == a2 && a1 == 255 {
+    (r1.to_double(), g1.to_double(), b1.to_double(), r2.to_double(), g2.to_double(), b2.to_double())
   } else {
-    blend_with_white(r1, g1, b1, a1)
-  }
-  let (r2, g2, b2) = if a1 == a2 && a1 == 255 {
-    (r2.to_double(), g2.to_double(), b2.to_double())
-  } else {
-    blend_with_white(r2, g2, b2, a2)
+    let alpha1 = a1.to_double() / 255.0
+    let white1 = 255.0 * (1.0 - alpha1)
+    let alpha2 = a2.to_double() / 255.0
+    let white2 = 255.0 * (1.0 - alpha2)
+    (
+      r1.to_double() * alpha1 + white1,
+      g1.to_double() * alpha1 + white1,
+      b1.to_double() * alpha1 + white1,
+      r2.to_double() * alpha2 + white2,
+      g2.to_double() * alpha2 + white2,
+      b2.to_double() * alpha2 + white2,
+    )
   }
   // Calculate YIQ components
-  let dr = r1 - r2
-  let dg = g1 - g2
-  let db = b1 - b2
+  let dr = rf1 - rf2
+  let dg = gf1 - gf2
+  let db = bf1 - bf2
   // Y (luminance)
   let y = 0.29889531 * dr + 0.58662247 * dg + 0.11448223 * db
   if y_only {
@@ -253,6 +260,7 @@ fn blend_with_white(
 
 ///|
 /// Check if a pixel is anti-aliased
+/// Note: Uses color_delta_at for luminance comparison between neighbors
 fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
   let width = img1.width
   let height = img1.height
@@ -302,31 +310,31 @@ fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
 
 ///|
 /// Check if pixel has 3+ siblings with similar color
+/// Optimized: early exit, cache data reference
 fn has_many_siblings(img : Image, x : Int, y : Int) -> Bool {
   let width = img.width
   let height = img.height
+  let data = img.data
   let mut count = 0
   let idx = (y * width + x) * 4
-  let r = img.data[idx]
-  let g = img.data[idx + 1]
-  let b = img.data[idx + 2]
-  let a = img.data[idx + 3]
-  for dy in -1..=1 {
-    for dx in -1..=1 {
-      if dx == 0 && dy == 0 {
-        continue
-      }
-      let nx = x + dx
-      let ny = y + dy
-      if nx < 0 || nx >= width || ny < 0 || ny >= height {
-        continue
-      }
+  let r = data[idx]
+  let g = data[idx + 1]
+  let b = data[idx + 2]
+  let a = data[idx + 3]
+  // Unrolled neighbor check for better performance
+  // Check 8 neighbors: (-1,-1), (0,-1), (1,-1), (-1,0), (1,0), (-1,1), (0,1), (1,1)
+  let neighbors = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
+  for pair in neighbors {
+    let (dx, dy) = pair
+    let nx = x + dx
+    let ny = y + dy
+    if nx >= 0 && nx < width && ny >= 0 && ny < height {
       let nidx = (ny * width + nx) * 4
       // Check if colors are nearly identical
-      if (img.data[nidx] - r).abs() < 3 &&
-        (img.data[nidx + 1] - g).abs() < 3 &&
-        (img.data[nidx + 2] - b).abs() < 3 &&
-        (img.data[nidx + 3] - a).abs() < 3 {
+      if (data[nidx] - r).abs() < 3 &&
+        (data[nidx + 1] - g).abs() < 3 &&
+        (data[nidx + 2] - b).abs() < 3 &&
+        (data[nidx + 3] - a).abs() < 3 {
         count += 1
         if count >= 3 {
           return true
@@ -351,8 +359,53 @@ fn blend_gray(img : Image, x : Int, y : Int, alpha : Double) -> Color {
 }
 
 ///|
+/// Inline color delta calculation for maximum performance
+/// Returns absolute delta value (always positive)
+fn color_delta_inline(
+  data1 : Array[Int],
+  data2 : Array[Int],
+  base : Int,
+) -> Double {
+  let r1 = data1[base]
+  let g1 = data1[base + 1]
+  let b1 = data1[base + 2]
+  let a1 = data1[base + 3]
+  let r2 = data2[base]
+  let g2 = data2[base + 1]
+  let b2 = data2[base + 2]
+  let a2 = data2[base + 3]
+  // Fast path: both fully opaque (most common case)
+  let (rf1, gf1, bf1, rf2, gf2, bf2) : (Double, Double, Double, Double, Double, Double) = if a1 == a2 && a1 == 255 {
+    (r1.to_double(), g1.to_double(), b1.to_double(), r2.to_double(), g2.to_double(), b2.to_double())
+  } else {
+    // Need to blend both with white
+    let alpha1 = a1.to_double() / 255.0
+    let white1 = 255.0 * (1.0 - alpha1)
+    let alpha2 = a2.to_double() / 255.0
+    let white2 = 255.0 * (1.0 - alpha2)
+    (
+      r1.to_double() * alpha1 + white1,
+      g1.to_double() * alpha1 + white1,
+      b1.to_double() * alpha1 + white1,
+      r2.to_double() * alpha2 + white2,
+      g2.to_double() * alpha2 + white2,
+      b2.to_double() * alpha2 + white2,
+    )
+  }
+  let dr = rf1 - rf2
+  let dg = gf1 - gf2
+  let db = bf1 - bf2
+  let y = 0.29889531 * dr + 0.58662247 * dg + 0.11448223 * db
+  let i = 0.59597799 * dr - 0.27417610 * dg - 0.32180189 * db
+  let q = 0.21147017 * dr - 0.52261711 * dg + 0.31114694 * db
+  let delta = 0.5053 * y * y + 0.299 * i * i + 0.1957 * q * q
+  delta
+}
+
+///|
 /// Simple comparison without anti-aliasing detection
 /// Returns the number of different pixels
+/// Optimized: inline delta calculation, minimize function calls
 pub fn pixelmatch_simple(img1 : Image, img2 : Image, threshold : Double) -> Int {
   if img1.width != img2.width || img1.height != img2.height {
     abort("Image dimensions must match")
@@ -360,20 +413,12 @@ pub fn pixelmatch_simple(img1 : Image, img2 : Image, threshold : Double) -> Int 
   let max_delta = 35215.0 * threshold * threshold * threshold * threshold
   let mut diff_count = 0
   let len = img1.data.length() / 4
+  let data1 = img1.data
+  let data2 = img2.data
   for i in 0..<len {
     let base = i * 4
-    let delta = color_delta(
-      img1.data[base],
-      img1.data[base + 1],
-      img1.data[base + 2],
-      img1.data[base + 3],
-      img2.data[base],
-      img2.data[base + 1],
-      img2.data[base + 2],
-      img2.data[base + 3],
-      false,
-    )
-    if delta.abs() > max_delta {
+    let delta = color_delta_inline(data1, data2, base)
+    if delta > max_delta {
       diff_count += 1
     }
   }
@@ -425,6 +470,7 @@ pub(all) struct DiffReport {
 
 ///|
 /// Generate a comprehensive diff report
+/// Optimized: pre-allocate arrays, cache references
 pub fn diff_report(
   img1 : Image,
   img2 : Image,
@@ -442,33 +488,33 @@ pub fn diff_report(
     options.threshold *
     options.threshold *
     options.threshold
-  // Initialize grid
+  // Initialize grid - pre-allocate
   let grid_cols = if width < grid_size { 1 } else { grid_size }
   let grid_rows = if height < grid_size { 1 } else { grid_size }
   let cell_w = width / grid_cols
   let cell_h = height / grid_rows
-  let grid : Array[Array[Int]] = []
-  for _ in 0..<grid_rows {
-    let row : Array[Int] = Array::make(grid_cols, 0)
-    grid.push(row)
+  let grid : Array[Array[Int]] = Array::make(grid_rows, [])
+  for i in 0..<grid_rows {
+    grid[i] = Array::make(grid_cols, 0)
   }
-  // Collect diff pixels
+  // Collect diff pixels - use flat array for diff_map
   let mut diff_count = 0
   let mut aa_count = 0
-  let diff_map : Array[Array[Bool]] = []
-  for _ in 0..<height {
-    diff_map.push(Array::make(width, false))
-  }
+  let diff_map : Array[Bool] = Array::make(width * height, false)
+  let data1 = img1.data
+  let data2 = img2.data
   for y in 0..<height {
+    let row_offset = y * width
     for x in 0..<width {
-      let delta = color_delta_at(img1, img2, x, y, false)
-      if delta.abs() > max_delta {
+      let base = (row_offset + x) * 4
+      let delta = color_delta_inline(data1, data2, base)
+      if delta > max_delta {
         if not(options.include_aa) &&
           (is_antialiased(img1, img2, x, y) || is_antialiased(img2, img1, x, y)) {
           aa_count += 1
         } else {
           diff_count += 1
-          diff_map[y][x] = true
+          diff_map[row_offset + x] = true
           // Update grid
           let gx = if cell_w > 0 { x / cell_w } else { 0 }
           let gy = if cell_h > 0 { y / cell_h } else { 0 }
@@ -480,7 +526,7 @@ pub fn diff_report(
     }
   }
   // Find connected regions using simple bounding box detection
-  let regions = find_diff_regions(diff_map, width, height)
+  let regions = find_diff_regions_flat(diff_map, width, height)
   let match_ratio = if total_pixels > 0 {
     1.0 - diff_count.to_double() / total_pixels.to_double()
   } else {
@@ -502,39 +548,36 @@ pub fn diff_report(
 
 ///|
 /// Find bounding boxes of diff regions using connected component labeling
-fn find_diff_regions(
-  diff_map : Array[Array[Bool]],
+/// Optimized: use flat arrays, check bounds before push
+fn find_diff_regions_flat(
+  diff_map : Array[Bool],
   width : Int,
   height : Int,
 ) -> Array[DiffRegion] {
-  let visited : Array[Array[Bool]] = []
-  for _ in 0..<height {
-    visited.push(Array::make(width, false))
-  }
+  let size = width * height
+  let visited : Array[Bool] = Array::make(size, false)
   let regions : Array[DiffRegion] = []
   for y in 0..<height {
     for x in 0..<width {
-      if diff_map[y][x] && not(visited[y][x]) {
+      let idx = y * width + x
+      if diff_map[idx] && not(visited[idx]) {
         // Found unvisited diff pixel, flood fill to find region
         let mut min_x = x
         let mut max_x = x
         let mut min_y = y
         let mut max_y = y
         let mut pixel_count = 0
-        // Simple flood fill using stack
-        let stack : Array[(Int, Int)] = [(x, y)]
+        // Simple flood fill using stack - pre-check bounds before push
+        let stack : Array[Int] = [idx]
         while stack.length() > 0 {
-          let (cx, cy) = stack.pop().unwrap()
-          if cx < 0 ||
-            cx >= width ||
-            cy < 0 ||
-            cy >= height ||
-            visited[cy][cx] ||
-            not(diff_map[cy][cx]) {
+          let cidx = stack.pop().unwrap()
+          if visited[cidx] || not(diff_map[cidx]) {
             continue
           }
-          visited[cy][cx] = true
+          visited[cidx] = true
           pixel_count += 1
+          let cx = cidx % width
+          let cy = cidx / width
           if cx < min_x {
             min_x = cx
           }
@@ -547,11 +590,19 @@ fn find_diff_regions(
           if cy > max_y {
             max_y = cy
           }
-          // Add neighbors
-          stack.push((cx - 1, cy))
-          stack.push((cx + 1, cy))
-          stack.push((cx, cy - 1))
-          stack.push((cx, cy + 1))
+          // Add neighbors with bounds check before push
+          if cx > 0 {
+            stack.push(cidx - 1)
+          }
+          if cx < width - 1 {
+            stack.push(cidx + 1)
+          }
+          if cy > 0 {
+            stack.push(cidx - width)
+          }
+          if cy < height - 1 {
+            stack.push(cidx + width)
+          }
         }
         if pixel_count > 0 {
           regions.push({
@@ -655,6 +706,202 @@ pub fn DiffReport::to_text(self : DiffReport) -> String {
         " "
       s += "pixels=" + region.diff_pixels.to_string() + "\n"
     }
+  }
+  s
+}
+
+///|
+/// Convert DiffReport to compact AI format
+/// Minimal tokens, maximum spatial information
+pub fn DiffReport::to_compact(self : DiffReport) -> String {
+  let mut s = ""
+  // One-line summary
+  let pct = (self.match_ratio * 100.0).to_int()
+  s += "diff:" +
+    self.diff_count.to_string() +
+    "/" +
+    self.total_pixels.to_string() +
+    "(" +
+    pct.to_string() +
+    "%match)\n"
+  // Binary heatmap - single chars, no spaces
+  for row in self.grid {
+    for val in row {
+      s += if val == 0 { "." } else { "X" }
+    }
+    s += "\n"
+  }
+  // Compact regions: x,y,w,h format
+  if self.regions.length() > 0 {
+    s += "regions:"
+    for i, r in self.regions {
+      if i > 0 {
+        s += ";"
+      }
+      s += r.x.to_string() +
+        "," +
+        r.y.to_string() +
+        "," +
+        r.width.to_string() +
+        "x" +
+        r.height.to_string()
+    }
+    s += "\n"
+  }
+  s
+}
+
+///|
+/// Analyze grid pattern to detect shape hints
+fn detect_shape_hints(
+  grid : Array[Array[Int]],
+  regions : Array[DiffRegion],
+) -> Array[String] {
+  let hints : Array[String] = []
+  let rows = grid.length()
+  let cols = if rows > 0 { grid[0].length() } else { 0 }
+  if rows == 0 || cols == 0 {
+    return hints
+  }
+  // Check for hole (ring/donut): diff on edges but gap in middle
+  let mut has_outer = false
+  let mut has_inner_gap = false
+  let mid_row = rows / 2
+  let mid_col = cols / 2
+  // Check outer ring
+  for c in 0..<cols {
+    if grid[0][c] > 0 || grid[rows - 1][c] > 0 {
+      has_outer = true
+    }
+  }
+  for r in 0..<rows {
+    if grid[r][0] > 0 || grid[r][cols - 1] > 0 {
+      has_outer = true
+    }
+  }
+  // Check inner gap (center area has significantly less diff than edges)
+  // Use smaller center region (middle 20%) for better hole detection
+  let center_start_r = rows * 2 / 5
+  let center_end_r = rows * 3 / 5
+  let center_start_c = cols * 2 / 5
+  let center_end_c = cols * 3 / 5
+  let mut center_weight = 0
+  let mut edge_weight = 0
+  let mut total_weight = 0
+  for r in 0..<rows {
+    for c in 0..<cols {
+      let v = grid[r][c]
+      total_weight += v
+      if r >= center_start_r && r < center_end_r && c >= center_start_c && c < center_end_c {
+        center_weight += v
+      } else {
+        edge_weight += v
+      }
+    }
+  }
+  // If edges have significantly more diff than center, likely has a hole
+  // Use ratio < 0.2 for smaller center region
+  let has_hole = edge_weight > 0 && center_weight.to_double() / total_weight.to_double() < 0.05
+  if has_hole && regions.length() == 1 {
+    hints.push("HAS_HOLE: shape may have empty center (ring/donut/frame)")
+  }
+  // Check for border/frame pattern
+  let mut is_border = true
+  let rows_inner = rows - 1
+  let cols_inner = cols - 1
+  for r in 1..<rows_inner {
+    for c in 1..<cols_inner {
+      if grid[r][c] > 0 {
+        // Check if it's only on edges
+        let on_edge = r < 2 || r >= rows - 2 || c < 2 || c >= cols - 2
+        if not(on_edge) {
+          is_border = false
+        }
+      }
+    }
+  }
+  if is_border && (grid[0][0] > 0 || grid[0][cols - 1] > 0) {
+    hints.push("IS_BORDER: changes only on edges (frame pattern)")
+  }
+  // Check for directional shape (asymmetric)
+  let mut top_weight = 0
+  let mut bottom_weight = 0
+  let mut left_weight = 0
+  let mut right_weight = 0
+  for r in 0..<rows {
+    for c in 0..<cols {
+      let v = grid[r][c]
+      if r < rows / 2 {
+        top_weight += v
+      } else {
+        bottom_weight += v
+      }
+      if c < cols / 2 {
+        left_weight += v
+      } else {
+        right_weight += v
+      }
+    }
+  }
+  let vertical_ratio = if bottom_weight > 0 {
+    top_weight.to_double() / bottom_weight.to_double()
+  } else {
+    0.0
+  }
+  let horizontal_ratio = if right_weight > 0 {
+    left_weight.to_double() / right_weight.to_double()
+  } else {
+    0.0
+  }
+  // Only add directional hints if there's a significant imbalance
+  // Use 1.08 threshold (8% asymmetry), but only show the most prominent direction
+  // Prefer vertical direction when asymmetries are equal (arrows typically point up/down)
+  let v_asymmetry = if vertical_ratio > 1.0 { vertical_ratio } else { 1.0 / vertical_ratio }
+  let h_asymmetry = if horizontal_ratio > 1.0 { horizontal_ratio } else { 1.0 / horizontal_ratio }
+  // Only show directional hint for the dominant axis, and only if significant
+  if v_asymmetry >= 1.08 && v_asymmetry >= h_asymmetry && top_weight + bottom_weight > 0 {
+    let dir = if vertical_ratio >= 1.08 { "top-heavy (pointing up?)" } else { "bottom-heavy (pointing down?)" }
+    hints.push("DIRECTIONAL: " + dir)
+  } else if h_asymmetry >= 1.08 && left_weight + right_weight > 0 {
+    let dir = if horizontal_ratio >= 1.08 { "left-heavy (pointing left?)" } else { "right-heavy (pointing right?)" }
+    hints.push("DIRECTIONAL: " + dir)
+  }
+  // Check for multiple separate regions
+  if regions.length() > 3 {
+    hints.push("MULTI_REGION: " + regions.length().to_string() + " separate areas (scattered or pattern)")
+  }
+  // Check for repeating pattern (checkerboard-like)
+  if regions.length() > 5 {
+    let first = regions[0]
+    let mut same_size = true
+    for i in 1..<regions.length() {
+      let r = regions[i]
+      if (r.width - first.width).abs() > 2 || (r.height - first.height).abs() > 2 {
+        same_size = false
+      }
+    }
+    if same_size {
+      hints.push("REPEATING: similar-sized regions (grid/checkerboard pattern)")
+    }
+  }
+  hints
+}
+
+///|
+/// Convert DiffReport to compact format with shape hints
+/// Adds contextual hints to help AI interpretation
+pub fn DiffReport::to_compact_with_hints(self : DiffReport) -> String {
+  let mut s = self.to_compact()
+  let hints = detect_shape_hints(self.grid, self.regions)
+  if hints.length() > 0 {
+    s += "hints:"
+    for i, hint in hints {
+      if i > 0 {
+        s += ";"
+      }
+      s += hint
+    }
+    s += "\n"
   }
   s
 }
