@@ -2,6 +2,7 @@
 /// Pixelmatch - Fast pixel-level image comparison library
 /// Port of mapbox/pixelmatch to MoonBit
 
+///|
 /// RGBA color representation
 pub(all) struct Color {
   r : Int
@@ -186,8 +187,22 @@ fn color_delta(
   y_only : Bool,
 ) -> Double {
   // Handle alpha - need to blend both when either is non-opaque or they differ
-  let (rf1, gf1, bf1, rf2, gf2, bf2) : (Double, Double, Double, Double, Double, Double) = if a1 == a2 && a1 == 255 {
-    (r1.to_double(), g1.to_double(), b1.to_double(), r2.to_double(), g2.to_double(), b2.to_double())
+  let (rf1, gf1, bf1, rf2, gf2, bf2) : (
+    Double,
+    Double,
+    Double,
+    Double,
+    Double,
+    Double,
+  ) = if a1 == a2 && a1 == 255 {
+    (
+      r1.to_double(),
+      g1.to_double(),
+      b1.to_double(),
+      r2.to_double(),
+      g2.to_double(),
+      b2.to_double(),
+    )
   } else {
     let alpha1 = a1.to_double() / 255.0
     let white1 = 255.0 * (1.0 - alpha1)
@@ -216,7 +231,11 @@ fn color_delta(
   let q = 0.21147017 * dr - 0.52261711 * dg + 0.31114694 * db
   // Weighted delta (sign indicates lightening/darkening)
   let delta = 0.5053 * y * y + 0.299 * i * i + 0.1957 * q * q
-  if y < 0.0 { -delta } else { delta }
+  if y < 0.0 {
+    -delta
+  } else {
+    delta
+  }
 }
 
 ///|
@@ -242,23 +261,6 @@ fn color_delta_at(
 }
 
 ///|
-/// Blend color with white based on alpha
-fn blend_with_white(
-  r : Int,
-  g : Int,
-  b : Int,
-  a : Int,
-) -> (Double, Double, Double) {
-  let alpha = a.to_double() / 255.0
-  let white = 255.0 * (1.0 - alpha)
-  (
-    r.to_double() * alpha + white,
-    g.to_double() * alpha + white,
-    b.to_double() * alpha + white,
-  )
-}
-
-///|
 /// Check if a pixel is anti-aliased
 /// Note: Uses color_delta_at for luminance comparison between neighbors
 fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
@@ -272,8 +274,8 @@ fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
   let mut max_x = x
   let mut max_y = y
   // Check 8 neighbors
-  for dy in -1..=1 {
-    for dx in -1..=1 {
+  for dy in -1..<=1 {
+    for dx in -1..<=1 {
       if dx == 0 && dy == 0 {
         continue
       }
@@ -304,8 +306,14 @@ fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
     return false
   }
   // Check if darkest/brightest neighbor has 3+ equal siblings in both images
-  (has_many_siblings(img1, min_x, min_y) && has_many_siblings(img2, min_x, min_y)) ||
-  (has_many_siblings(img1, max_x, max_y) && has_many_siblings(img2, max_x, max_y))
+  (
+    has_many_siblings(img1, min_x, min_y) &&
+    has_many_siblings(img2, min_x, min_y)
+  ) ||
+  (
+    has_many_siblings(img1, max_x, max_y) &&
+    has_many_siblings(img2, max_x, max_y)
+  )
 }
 
 ///|
@@ -323,7 +331,16 @@ fn has_many_siblings(img : Image, x : Int, y : Int) -> Bool {
   let a = data[idx + 3]
   // Unrolled neighbor check for better performance
   // Check 8 neighbors: (-1,-1), (0,-1), (1,-1), (-1,0), (1,0), (-1,1), (0,1), (1,1)
-  let neighbors = [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)]
+  let neighbors = [
+    (-1, -1),
+    (0, -1),
+    (1, -1),
+    (-1, 0),
+    (1, 0),
+    (-1, 1),
+    (0, 1),
+    (1, 1),
+  ]
   for pair in neighbors {
     let (dx, dy) = pair
     let nx = x + dx
@@ -375,8 +392,22 @@ fn color_delta_inline(
   let b2 = data2[base + 2]
   let a2 = data2[base + 3]
   // Fast path: both fully opaque (most common case)
-  let (rf1, gf1, bf1, rf2, gf2, bf2) : (Double, Double, Double, Double, Double, Double) = if a1 == a2 && a1 == 255 {
-    (r1.to_double(), g1.to_double(), b1.to_double(), r2.to_double(), g2.to_double(), b2.to_double())
+  let (rf1, gf1, bf1, rf2, gf2, bf2) : (
+    Double,
+    Double,
+    Double,
+    Double,
+    Double,
+    Double,
+  ) = if a1 == a2 && a1 == 255 {
+    (
+      r1.to_double(),
+      g1.to_double(),
+      b1.to_double(),
+      r2.to_double(),
+      g2.to_double(),
+      b2.to_double(),
+    )
   } else {
     // Need to blend both with white
     let alpha1 = a1.to_double() / 255.0
@@ -475,7 +506,7 @@ pub fn diff_report(
   img1 : Image,
   img2 : Image,
   options : Options,
-  grid_size~ : Int = 10,
+  grid_size? : Int = 10,
 ) -> DiffReport {
   if img1.width != img2.width || img1.height != img2.height {
     abort("Image dimensions must match")
@@ -694,11 +725,7 @@ pub fn DiffReport::to_text(self : DiffReport) -> String {
     s += "\nDiff Regions (" + self.regions.length().to_string() + "):\n"
     for i, region in self.regions {
       s += "  [" + i.to_string() + "] "
-      s += "pos=(" +
-        region.x.to_string() +
-        "," +
-        region.y.to_string() +
-        ") "
+      s += "pos=(" + region.x.to_string() + "," + region.y.to_string() + ") "
       s += "size=" +
         region.width.to_string() +
         "x" +
@@ -764,21 +791,6 @@ fn detect_shape_hints(
     return hints
   }
   // Check for hole (ring/donut): diff on edges but gap in middle
-  let mut has_outer = false
-  let mut has_inner_gap = false
-  let mid_row = rows / 2
-  let mid_col = cols / 2
-  // Check outer ring
-  for c in 0..<cols {
-    if grid[0][c] > 0 || grid[rows - 1][c] > 0 {
-      has_outer = true
-    }
-  }
-  for r in 0..<rows {
-    if grid[r][0] > 0 || grid[r][cols - 1] > 0 {
-      has_outer = true
-    }
-  }
   // Check inner gap (center area has significantly less diff than edges)
   // Use smaller center region (middle 20%) for better hole detection
   let center_start_r = rows * 2 / 5
@@ -792,7 +804,10 @@ fn detect_shape_hints(
     for c in 0..<cols {
       let v = grid[r][c]
       total_weight += v
-      if r >= center_start_r && r < center_end_r && c >= center_start_c && c < center_end_c {
+      if r >= center_start_r &&
+        r < center_end_r &&
+        c >= center_start_c &&
+        c < center_end_c {
         center_weight += v
       } else {
         edge_weight += v
@@ -801,7 +816,8 @@ fn detect_shape_hints(
   }
   // If edges have significantly more diff than center, likely has a hole
   // Use ratio < 0.2 for smaller center region
-  let has_hole = edge_weight > 0 && center_weight.to_double() / total_weight.to_double() < 0.05
+  let has_hole = edge_weight > 0 &&
+    center_weight.to_double() / total_weight.to_double() < 0.05
   if has_hole && regions.length() == 1 {
     hints.push("HAS_HOLE: shape may have empty center (ring/donut/frame)")
   }
@@ -856,19 +872,41 @@ fn detect_shape_hints(
   // Only add directional hints if there's a significant imbalance
   // Use 1.08 threshold (8% asymmetry), but only show the most prominent direction
   // Prefer vertical direction when asymmetries are equal (arrows typically point up/down)
-  let v_asymmetry = if vertical_ratio > 1.0 { vertical_ratio } else { 1.0 / vertical_ratio }
-  let h_asymmetry = if horizontal_ratio > 1.0 { horizontal_ratio } else { 1.0 / horizontal_ratio }
+  let v_asymmetry = if vertical_ratio > 1.0 {
+    vertical_ratio
+  } else {
+    1.0 / vertical_ratio
+  }
+  let h_asymmetry = if horizontal_ratio > 1.0 {
+    horizontal_ratio
+  } else {
+    1.0 / horizontal_ratio
+  }
   // Only show directional hint for the dominant axis, and only if significant
-  if v_asymmetry >= 1.08 && v_asymmetry >= h_asymmetry && top_weight + bottom_weight > 0 {
-    let dir = if vertical_ratio >= 1.08 { "top-heavy (pointing up?)" } else { "bottom-heavy (pointing down?)" }
+  if v_asymmetry >= 1.08 &&
+    v_asymmetry >= h_asymmetry &&
+    top_weight + bottom_weight > 0 {
+    let dir = if vertical_ratio >= 1.08 {
+      "top-heavy (pointing up?)"
+    } else {
+      "bottom-heavy (pointing down?)"
+    }
     hints.push("DIRECTIONAL: " + dir)
   } else if h_asymmetry >= 1.08 && left_weight + right_weight > 0 {
-    let dir = if horizontal_ratio >= 1.08 { "left-heavy (pointing left?)" } else { "right-heavy (pointing right?)" }
+    let dir = if horizontal_ratio >= 1.08 {
+      "left-heavy (pointing left?)"
+    } else {
+      "right-heavy (pointing right?)"
+    }
     hints.push("DIRECTIONAL: " + dir)
   }
   // Check for multiple separate regions
   if regions.length() > 3 {
-    hints.push("MULTI_REGION: " + regions.length().to_string() + " separate areas (scattered or pattern)")
+    hints.push(
+      "MULTI_REGION: " +
+      regions.length().to_string() +
+      " separate areas (scattered or pattern)",
+    )
   }
   // Check for repeating pattern (checkerboard-like)
   if regions.length() > 5 {
@@ -876,7 +914,8 @@ fn detect_shape_hints(
     let mut same_size = true
     for i in 1..<regions.length() {
       let r = regions[i]
-      if (r.width - first.width).abs() > 2 || (r.height - first.height).abs() > 2 {
+      if (r.width - first.width).abs() > 2 ||
+        (r.height - first.height).abs() > 2 {
         same_size = false
       }
     }

@@ -1,8 +1,9 @@
 ///|
 /// Benchmark suite for pixelmatch
 
+///|
 /// Small identical images (baseline)
-test "bench: identical 50x50"(b : @bench.T) {
+test "bench: identical 50x50" (b : @bench.T) {
   let img1 = Image::new(50, 50)
   let img2 = Image::new(50, 50)
   for y in 0..<50 {
@@ -14,8 +15,9 @@ test "bench: identical 50x50"(b : @bench.T) {
   b.bench(fn() { b.keep(pixelmatch_simple(img1, img2, 0.1)) })
 }
 
+///|
 /// Medium identical images
-test "bench: identical 200x200"(b : @bench.T) {
+test "bench: identical 200x200" (b : @bench.T) {
   let img1 = Image::new(200, 200)
   let img2 = Image::new(200, 200)
   for y in 0..<200 {
@@ -27,8 +29,9 @@ test "bench: identical 200x200"(b : @bench.T) {
   b.bench(fn() { b.keep(pixelmatch_simple(img1, img2, 0.1)) })
 }
 
+///|
 /// Large identical images (stress test)
-test "bench: identical 500x500"(b : @bench.T) {
+test "bench: identical 500x500" (b : @bench.T) {
   let img1 = Image::new(500, 500)
   let img2 = Image::new(500, 500)
   for y in 0..<500 {
@@ -40,8 +43,9 @@ test "bench: identical 500x500"(b : @bench.T) {
   b.bench(fn() { b.keep(pixelmatch_simple(img1, img2, 0.1)) })
 }
 
+///|
 /// Completely different images (worst case for delta calc)
-test "bench: different 200x200"(b : @bench.T) {
+test "bench: different 200x200" (b : @bench.T) {
   let img1 = Image::new(200, 200)
   let img2 = Image::new(200, 200)
   for y in 0..<200 {
@@ -53,8 +57,9 @@ test "bench: different 200x200"(b : @bench.T) {
   b.bench(fn() { b.keep(pixelmatch_simple(img1, img2, 0.1)) })
 }
 
+///|
 /// With alpha blending (triggers blend_with_white)
-test "bench: alpha blend 200x200"(b : @bench.T) {
+test "bench: alpha blend 200x200" (b : @bench.T) {
   let img1 = Image::new(200, 200)
   let img2 = Image::new(200, 200)
   for y in 0..<200 {
@@ -66,8 +71,9 @@ test "bench: alpha blend 200x200"(b : @bench.T) {
   b.bench(fn() { b.keep(pixelmatch_simple(img1, img2, 0.1)) })
 }
 
+///|
 /// Full pixelmatch with anti-aliasing detection
-test "bench: full AA detection 100x100"(b : @bench.T) {
+test "bench: full AA detection 100x100" (b : @bench.T) {
   let img1 = Image::new(100, 100)
   let img2 = Image::new(100, 100)
   // Create pattern with edges that might trigger AA detection
@@ -83,8 +89,9 @@ test "bench: full AA detection 100x100"(b : @bench.T) {
   b.bench(fn() { b.keep(pixelmatch(img1, img2, None, options)) })
 }
 
+///|
 /// Pixelmatch with output image generation
-test "bench: with output 100x100"(b : @bench.T) {
+test "bench: with output 100x100" (b : @bench.T) {
   let img1 = Image::new(100, 100)
   let img2 = Image::new(100, 100)
   let output = Image::new(100, 100)
@@ -102,8 +109,9 @@ test "bench: with output 100x100"(b : @bench.T) {
   b.bench(fn() { b.keep(pixelmatch(img1, img2, Some(output), options)) })
 }
 
+///|
 /// diff_report full pipeline
-test "bench: diff_report 100x100"(b : @bench.T) {
+test "bench: diff_report 100x100" (b : @bench.T) {
   let img1 = Image::new(100, 100)
   let img2 = Image::new(100, 100)
   for y in 0..<100 {
@@ -127,8 +135,9 @@ test "bench: diff_report 100x100"(b : @bench.T) {
   b.bench(fn() { b.keep(diff_report(img1, img2, options)) })
 }
 
+///|
 /// diff_report with many small regions (stress test flood fill)
-test "bench: diff_report scattered 100x100"(b : @bench.T) {
+test "bench: diff_report scattered 100x100" (b : @bench.T) {
   let img1 = Image::new(100, 100)
   let img2 = Image::new(100, 100)
   for y in 0..<100 {
@@ -139,8 +148,8 @@ test "bench: diff_report scattered 100x100"(b : @bench.T) {
   }
   // Add many small scattered dots
   for i in 0..<20 {
-    let px = (i * 5) % 95
-    let py = (i * 7) % 95
+    let px = i * 5 % 95
+    let py = i * 7 % 95
     for dy in 0..<3 {
       for dx in 0..<3 {
         img2.set_pixel(px + dx, py + dy, Color::rgba(255, 0, 0, 255))
@@ -151,8 +160,9 @@ test "bench: diff_report scattered 100x100"(b : @bench.T) {
   b.bench(fn() { b.keep(diff_report(img1, img2, options)) })
 }
 
+///|
 /// to_text generation
-test "bench: to_text 100x100"(b : @bench.T) {
+test "bench: to_text 100x100" (b : @bench.T) {
   let img1 = Image::new(100, 100)
   let img2 = Image::new(100, 100)
   for y in 0..<100 {

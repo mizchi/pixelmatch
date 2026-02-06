@@ -1,6 +1,7 @@
 ///|
 /// Test cases for AI interpretation evaluation
 
+///|
 /// Case 1: Identical images
 pub fn case_identical() -> String {
   let img1 = Image::new(50, 50)
@@ -14,6 +15,7 @@ pub fn case_identical() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 1: Identical images (verbose)
 pub fn case_identical_verbose() -> String {
   let img1 = Image::new(50, 50)
@@ -27,6 +29,7 @@ pub fn case_identical_verbose() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 2: Red square added in top-left
 pub fn case_red_square_topleft() -> String {
   let img1 = Image::new(50, 50)
@@ -46,6 +49,7 @@ pub fn case_red_square_topleft() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 3: Blue rectangle in bottom-right removed
 pub fn case_bottomright_removed() -> String {
   let img1 = Image::new(50, 50)
@@ -65,6 +69,7 @@ pub fn case_bottomright_removed() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 4: Overall brightness increased
 pub fn case_brighter() -> String {
   let img1 = Image::new(50, 50)
@@ -78,6 +83,7 @@ pub fn case_brighter() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 5: Border/frame added
 pub fn case_border_added() -> String {
   let img1 = Image::new(50, 50)
@@ -99,6 +105,7 @@ pub fn case_border_added() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 6: Circle drawn in center
 pub fn case_center_circle() -> String {
   let img1 = Image::new(50, 50)
@@ -125,6 +132,7 @@ pub fn case_center_circle() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 7: Horizontal line across middle
 pub fn case_horizontal_line() -> String {
   let img1 = Image::new(50, 50)
@@ -144,6 +152,7 @@ pub fn case_horizontal_line() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 8: Multiple small changes (scattered dots)
 pub fn case_scattered_dots() -> String {
   let img1 = Image::new(50, 50)
@@ -176,6 +185,7 @@ pub fn case_scattered_dots() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 9: Large single change (half image different)
 pub fn case_half_changed() -> String {
   let img1 = Image::new(50, 50)
@@ -193,6 +203,7 @@ pub fn case_half_changed() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 10: Diagonal stripe
 pub fn case_diagonal_stripe() -> String {
   let img1 = Image::new(50, 50)
@@ -215,6 +226,7 @@ pub fn case_diagonal_stripe() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 11: L-shaped region
 pub fn case_l_shape() -> String {
   let img1 = Image::new(50, 50)
@@ -239,6 +251,7 @@ pub fn case_l_shape() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 12: Concentric rings (donut)
 pub fn case_donut() -> String {
   let img1 = Image::new(50, 50)
@@ -265,6 +278,7 @@ pub fn case_donut() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 13: Checkerboard pattern
 pub fn case_checkerboard() -> String {
   let img1 = Image::new(50, 50)
@@ -288,6 +302,7 @@ pub fn case_checkerboard() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 14: Two separate rectangles (top-left and bottom-right)
 pub fn case_two_corners() -> String {
   let img1 = Image::new(50, 50)
@@ -313,6 +328,7 @@ pub fn case_two_corners() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 15: Cross/plus shape in center
 pub fn case_cross() -> String {
   let img1 = Image::new(50, 50)
@@ -338,6 +354,7 @@ pub fn case_cross() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 16: Triangle pointing right
 pub fn case_triangle() -> String {
   let img1 = Image::new(50, 50)
@@ -353,7 +370,10 @@ pub fn case_triangle() -> String {
     for x in 0..<50 {
       let half_height = (x - 10) / 2
       let center_y = 25
-      if x >= 10 && x <= 40 && y >= center_y - half_height && y <= center_y + half_height {
+      if x >= 10 &&
+        x <= 40 &&
+        y >= center_y - half_height &&
+        y <= center_y + half_height {
         img2.set_pixel(x, y, Color::rgba(0, 150, 0, 255))
       }
     }
@@ -361,6 +381,7 @@ pub fn case_triangle() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 17: Vertical stripes
 pub fn case_vertical_stripes() -> String {
   let img1 = Image::new(50, 50)
@@ -374,7 +395,7 @@ pub fn case_vertical_stripes() -> String {
   // 5 vertical stripes
   for y in 0..<50 {
     for x in 0..<50 {
-      if (x / 10) % 2 == 0 {
+      if x / 10 % 2 == 0 {
         img2.set_pixel(x, y, Color::rgba(100, 100, 100, 255))
       }
     }
@@ -382,6 +403,7 @@ pub fn case_vertical_stripes() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 18: Nested squares (frame within frame)
 pub fn case_nested_squares() -> String {
   let img1 = Image::new(50, 50)
@@ -403,10 +425,10 @@ pub fn case_nested_squares() -> String {
   // Inner frame
   for y in 0..<50 {
     for x in 0..<50 {
-      if (x >= 15 && x < 20 || x >= 30 && x < 35) && y >= 15 && y < 35 {
+      if ((x >= 15 && x < 20) || (x >= 30 && x < 35)) && y >= 15 && y < 35 {
         img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
       }
-      if (y >= 15 && y < 20 || y >= 30 && y < 35) && x >= 15 && x < 35 {
+      if ((y >= 15 && y < 20) || (y >= 30 && y < 35)) && x >= 15 && x < 35 {
         img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
       }
     }
@@ -414,6 +436,7 @@ pub fn case_nested_squares() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 19: Arrow pointing up
 pub fn case_arrow_up() -> String {
   let img1 = Image::new(50, 50)
@@ -444,6 +467,7 @@ pub fn case_arrow_up() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// Case 20: Random-looking noise pattern (actually deterministic)
 pub fn case_noise() -> String {
   let img1 = Image::new(50, 50)
@@ -466,6 +490,7 @@ pub fn case_noise() -> String {
   diff_report(img1, img2, Options::default()).to_compact()
 }
 
+///|
 /// High-resolution versions (20x20 grid)
 pub fn case_donut_hires() -> String {
   let img1 = Image::new(50, 50)
@@ -491,6 +516,7 @@ pub fn case_donut_hires() -> String {
   diff_report(img1, img2, Options::default(), grid_size=20).to_compact()
 }
 
+///|
 pub fn case_triangle_hires() -> String {
   let img1 = Image::new(50, 50)
   let img2 = Image::new(50, 50)
@@ -504,7 +530,10 @@ pub fn case_triangle_hires() -> String {
     for x in 0..<50 {
       let half_height = (x - 10) / 2
       let center_y = 25
-      if x >= 10 && x <= 40 && y >= center_y - half_height && y <= center_y + half_height {
+      if x >= 10 &&
+        x <= 40 &&
+        y >= center_y - half_height &&
+        y <= center_y + half_height {
         img2.set_pixel(x, y, Color::rgba(0, 150, 0, 255))
       }
     }
@@ -512,6 +541,7 @@ pub fn case_triangle_hires() -> String {
   diff_report(img1, img2, Options::default(), grid_size=20).to_compact()
 }
 
+///|
 pub fn case_arrow_hires() -> String {
   let img1 = Image::new(50, 50)
   let img2 = Image::new(50, 50)
@@ -539,6 +569,7 @@ pub fn case_arrow_hires() -> String {
   diff_report(img1, img2, Options::default(), grid_size=20).to_compact()
 }
 
+///|
 pub fn case_checkerboard_hires() -> String {
   let img1 = Image::new(50, 50)
   let img2 = Image::new(50, 50)
@@ -560,6 +591,7 @@ pub fn case_checkerboard_hires() -> String {
   diff_report(img1, img2, Options::default(), grid_size=20).to_compact()
 }
 
+///|
 pub fn case_nested_hires() -> String {
   let img1 = Image::new(50, 50)
   let img2 = Image::new(50, 50)
@@ -580,10 +612,10 @@ pub fn case_nested_hires() -> String {
   // Inner frame
   for y in 0..<50 {
     for x in 0..<50 {
-      if (x >= 15 && x < 20 || x >= 30 && x < 35) && y >= 15 && y < 35 {
+      if ((x >= 15 && x < 20) || (x >= 30 && x < 35)) && y >= 15 && y < 35 {
         img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
       }
-      if (y >= 15 && y < 20 || y >= 30 && y < 35) && x >= 15 && x < 35 {
+      if ((y >= 15 && y < 20) || (y >= 30 && y < 35)) && x >= 15 && x < 35 {
         img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
       }
     }
@@ -591,6 +623,7 @@ pub fn case_nested_hires() -> String {
   diff_report(img1, img2, Options::default(), grid_size=20).to_compact()
 }
 
+///|
 /// Test hint generation
 pub fn case_donut_hints() -> String {
   let img1 = Image::new(50, 50)
@@ -616,6 +649,7 @@ pub fn case_donut_hints() -> String {
   diff_report(img1, img2, Options::default()).to_compact_with_hints()
 }
 
+///|
 pub fn case_arrow_hints() -> String {
   let img1 = Image::new(50, 50)
   let img2 = Image::new(50, 50)
@@ -643,6 +677,7 @@ pub fn case_arrow_hints() -> String {
   diff_report(img1, img2, Options::default()).to_compact_with_hints()
 }
 
+///|
 pub fn case_checkerboard_hints() -> String {
   let img1 = Image::new(50, 50)
   let img2 = Image::new(50, 50)
@@ -664,6 +699,7 @@ pub fn case_checkerboard_hints() -> String {
   diff_report(img1, img2, Options::default()).to_compact_with_hints()
 }
 
+///|
 pub fn case_border_hints() -> String {
   let img1 = Image::new(50, 50)
   let img2 = Image::new(50, 50)
@@ -683,6 +719,7 @@ pub fn case_border_hints() -> String {
   diff_report(img1, img2, Options::default()).to_compact_with_hints()
 }
 
+///|
 test "generate hint cases" {
   println("=== Donut with hints ===")
   println(case_donut_hints())
@@ -694,6 +731,7 @@ test "generate hint cases" {
   println(case_border_hints())
 }
 
+///|
 test "generate hires cases" {
   println("=== HIRES: Donut ===")
   println(case_donut_hires())
@@ -707,6 +745,7 @@ test "generate hires cases" {
   println(case_nested_hires())
 }
 
+///|
 test "generate all cases" {
   println("=== CASE 11: L-Shape ===")
   println(case_l_shape())

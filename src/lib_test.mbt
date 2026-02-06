@@ -8,7 +8,7 @@ test "identical images have zero diff" {
     img2.data[i] = 128
   }
   let diff = pixelmatch_simple(img1, img2, 0.1)
-  assert_eq!(diff, 0)
+  assert_eq(diff, 0)
 }
 
 ///|
@@ -23,7 +23,7 @@ test "completely different images" {
     }
   }
   let diff = pixelmatch_simple(img1, img2, 0.1)
-  assert_eq!(diff, 100) // All pixels different
+  assert_eq(diff, 100) // All pixels different
 }
 
 ///|
@@ -44,7 +44,7 @@ test "partial difference" {
     }
   }
   let diff = pixelmatch_simple(img1, img2, 0.1)
-  assert_eq!(diff, 25) // 5x5 = 25 pixels different
+  assert_eq(diff, 25) // 5x5 = 25 pixels different
 }
 
 ///|
@@ -60,10 +60,10 @@ test "threshold sensitivity" {
   }
   // High threshold should ignore small differences
   let diff_high = pixelmatch_simple(img1, img2, 0.5)
-  assert_eq!(diff_high, 0)
+  assert_eq(diff_high, 0)
   // Low threshold should catch small differences
   let diff_low = pixelmatch_simple(img1, img2, 0.001)
-  assert_eq!(diff_low, 100)
+  assert_eq(diff_low, 100)
 }
 
 ///|
@@ -77,7 +77,7 @@ test "match_ratio identical" {
     }
   }
   let ratio = match_ratio(img1, img2, Options::default())
-  assert_eq!(ratio, 1.0)
+  assert_eq(ratio, 1.0)
 }
 
 ///|
@@ -96,7 +96,7 @@ test "match_ratio half different" {
     }
   }
   let ratio = match_ratio(img1, img2, Options::default())
-  assert_eq!(ratio, 0.5)
+  assert_eq(ratio, 0.5)
 }
 
 ///|
@@ -114,12 +114,12 @@ test "pixelmatch with output" {
   // Make one pixel different
   img2.set_pixel(2, 2, Color::rgba(255, 0, 0, 255))
   let diff = pixelmatch(img1, img2, Some(output), Options::default())
-  assert_eq!(diff, 1)
+  assert_eq(diff, 1)
   // Check that diff pixel is marked with diff_color (red)
   let diff_pixel = output.get_pixel(2, 2)
-  assert_eq!(diff_pixel.r, 255)
-  assert_eq!(diff_pixel.g, 0)
-  assert_eq!(diff_pixel.b, 0)
+  assert_eq(diff_pixel.r, 255)
+  assert_eq(diff_pixel.g, 0)
+  assert_eq(diff_pixel.b, 0)
 }
 
 ///|
@@ -131,24 +131,24 @@ test "Image::from_pixels" {
     Color::rgba(255, 255, 255, 255),
   ]
   let img = Image::from_pixels(2, 2, pixels)
-  assert_eq!(img.get_pixel(0, 0), Color::rgba(255, 0, 0, 255))
-  assert_eq!(img.get_pixel(1, 0), Color::rgba(0, 255, 0, 255))
-  assert_eq!(img.get_pixel(0, 1), Color::rgba(0, 0, 255, 255))
-  assert_eq!(img.get_pixel(1, 1), Color::rgba(255, 255, 255, 255))
+  assert_eq(img.get_pixel(0, 0), Color::rgba(255, 0, 0, 255))
+  assert_eq(img.get_pixel(1, 0), Color::rgba(0, 255, 0, 255))
+  assert_eq(img.get_pixel(0, 1), Color::rgba(0, 0, 255, 255))
+  assert_eq(img.get_pixel(1, 1), Color::rgba(255, 255, 255, 255))
 }
 
 ///|
 test "Color constructors" {
   let c1 = Color::rgba(10, 20, 30, 40)
-  assert_eq!(c1.r, 10)
-  assert_eq!(c1.g, 20)
-  assert_eq!(c1.b, 30)
-  assert_eq!(c1.a, 40)
+  assert_eq(c1.r, 10)
+  assert_eq(c1.g, 20)
+  assert_eq(c1.b, 30)
+  assert_eq(c1.a, 40)
   let c2 = Color::rgb(100, 150, 200)
-  assert_eq!(c2.r, 100)
-  assert_eq!(c2.g, 150)
-  assert_eq!(c2.b, 200)
-  assert_eq!(c2.a, 255)
+  assert_eq(c2.r, 100)
+  assert_eq(c2.g, 150)
+  assert_eq(c2.b, 200)
+  assert_eq(c2.a, 255)
 }
 
 ///|
@@ -162,9 +162,9 @@ test "diff_report identical images" {
     }
   }
   let report = diff_report(img1, img2, Options::default())
-  assert_eq!(report.diff_count, 0)
-  assert_eq!(report.match_ratio, 1.0)
-  assert_eq!(report.regions.length(), 0)
+  assert_eq(report.diff_count, 0)
+  assert_eq(report.match_ratio, 1.0)
+  assert_eq(report.regions.length(), 0)
 }
 
 ///|
@@ -185,14 +185,14 @@ test "diff_report with differences" {
     }
   }
   let report = diff_report(img1, img2, Options::default())
-  assert_eq!(report.diff_count, 25) // 5x5 = 25 pixels
-  assert_true!(report.regions.length() >= 1)
+  assert_eq(report.diff_count, 25) // 5x5 = 25 pixels
+  assert_true(report.regions.length() >= 1)
   // Check that region covers the diff area
   let region = report.regions[0]
-  assert_eq!(region.x, 5)
-  assert_eq!(region.y, 5)
-  assert_eq!(region.width, 5)
-  assert_eq!(region.height, 5)
+  assert_eq(region.x, 5)
+  assert_eq(region.y, 5)
+  assert_eq(region.width, 5)
+  assert_eq(region.height, 5)
 }
 
 ///|
@@ -210,9 +210,9 @@ test "diff_report to_text" {
   let report = diff_report(img1, img2, Options::default(), grid_size=5)
   let text = report.to_text()
   // Check that text contains expected elements
-  assert_true!(text.contains("Diff Report"))
-  assert_true!(text.contains("10x10"))
-  assert_true!(text.contains("Different pixels: 1"))
+  assert_true(text.contains("Diff Report"))
+  assert_true(text.contains("10x10"))
+  assert_true(text.contains("Different pixels: 1"))
 }
 
 ///|
@@ -227,6 +227,6 @@ test "diff_report to_json" {
   }
   let report = diff_report(img1, img2, Options::default())
   let json = report.to_json()
-  assert_true!(json.contains("\"diff_count\": 0"))
-  assert_true!(json.contains("\"match_ratio\": 1"))
+  assert_true(json.contains("\"diff_count\": 0"))
+  assert_true(json.contains("\"match_ratio\": 1"))
 }
