@@ -1,6 +1,6 @@
 {
   "name": "mizchi/pixelmatch",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Fast pixel-level image comparison library for MoonBit/WASM",
   "deps": {},
   "readme": "README.md",
