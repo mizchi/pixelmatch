@@ -5,3 +5,6 @@ target
 .mooncakes/
 .moonagent/
 .jj/
+component/_build/
+component/*.wasm
+component/test/gen/
