@@ -157,20 +157,33 @@ let report = diff_report(img1, img2, options, grid_size=20)
 
 ## Performance
 
-### MoonBit Targets (200x200, identical images, Apple M5)
+### `pixelmatch_fast` — Unified API (200x200, Apple M5)
+
+| Scenario | JS (V8) | WASM | Native (C FFI) |
+|---|---|---|---|
+| Identical | 313µs | **225µs** | **15µs** |
+| 5% diff | 307µs | **235µs** | **17µs** |
+| All different | 312µs | 394µs | **54µs** |
+| 500x500 identical | 1880µs | **1430µs** | **93µs** |
+
+### All Implementations (200x200, identical, Apple M5)
 
 | Implementation | JS (V8) | WASM | Native |
 |---|---|---|---|
-| `pixelmatch_simple` | 311µs | 372µs | 1450µs |
-| `pixelmatch_simple_prefilter` | 288µs | 208µs | 263µs |
-| `pixelmatch_native` (C FFI) | N/A | N/A | **16.78µs** |
+| `pixelmatch_simple` | 451µs | 402µs | 1190µs |
+| `pixelmatch_simple_prefilter` | 313µs | 225µs | 281µs |
+| `pixelmatch_native` (C FFI) | N/A | N/A | **15µs** |
 
-### MoonBit Targets (200x200, all different, Apple M5)
+### E2E Pipeline with PNG (200x200, `mizchi/image`, Apple M5)
 
-| Implementation | JS (V8) | WASM | Native |
-|---|---|---|---|
-| `pixelmatch_simple` | 328µs | 371µs | 1180µs |
-| `pixelmatch_native` (C FFI) | N/A | N/A | **51.56µs** |
+| Step | JS (V8) | WASM |
+|---|---|---|
+| PNG decode | 18.6ms | 7.4ms |
+| `pixelmatch_fast` | 1.1ms | **0.24ms** |
+| PNG encode | 29.4ms | 12.5ms |
+| **Full pipeline** | **95ms** | **31ms** |
+
+PNG encode/decode dominates the pipeline (97% on WASM, 99% on JS). Optimizing the codec (e.g., native zlib C FFI) has far more impact than pixelmatch itself in E2E scenarios.
 
 ### Rust Benchmark (1920x1080, 5% diff, Apple M5)
 
@@ -229,12 +242,14 @@ Effective GPU time with heatmap readback (dispatch only, prealloc):
 
 ### Key Findings
 
-- **VRT typical case (0% diff)**: `pixelmatch_native` completes 200x200 in **16µs**, WASM prefilter in **208µs**
-- **Row prefilter** skips identical rows with fast memcmp -- up to 25x improvement for nearly-identical images
-- **Native C FFI** with zero-copy `FixedArray[Int]` → `int32_t*` mapping gives 56-86x speedup over pure MoonBit native
-- **Rust Rayon + prefilter** is the fastest portable option at 5.8x over single-threaded CPU
+- **Use `pixelmatch_fast`** — automatically picks the best implementation per target
+- **WASM is the fastest portable target** — 1.5-2.5x faster than JS across all benchmarks
+- **Native C FFI is 15-30x faster than WASM** for pixelmatch itself (15µs vs 225µs @200x200 identical)
+- **E2E bottleneck is PNG codec**, not pixelmatch — encode/decode is 97%+ of pipeline time on WASM
+- **Row prefilter** skips identical rows with fast memcmp — up to 25x for nearly-identical images
+- **Rust Rayon + prefilter** is the fastest CPU option at 5.8x over single-threaded
 - **GPU (wgpu)** wins at 4MP+ with pre-allocated buffers for diff-count only, but heatmap readback negates the advantage
-- **Best architecture for batch VRT**: GPU for triage (diff/no-diff), CPU Rayon for heatmap generation on flagged pairs
+- **Best batch VRT architecture**: GPU for triage (diff/no-diff), CPU Rayon for heatmap on flagged pairs
 
 Run benchmarks: `just bench` (MoonBit) / `just bench-rs` (Rust)
 
