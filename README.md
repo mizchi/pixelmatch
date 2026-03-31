@@ -182,13 +182,59 @@ let report = diff_report(img1, img2, options, grid_size=20)
 | Rayon + prefilter | 400µs | **5.8x** |
 | GPU (wgpu, incl. transfer) | 4182µs | 0.6x |
 
+### GPU vs CPU Crossover (Apple M5, wgpu/Metal)
+
+GPU compute becomes faster than Rayon+prefilter **only when buffers are already on GPU** (no upload cost). With per-frame upload, CPU always wins.
+
+| Scenario | GPU wins at | Notes |
+|---|---|---|
+| **Dispatch only, 5% diff** | **~4MP (2048x2048)** | GPU 1354µs vs Rayon 2682µs |
+| **Dispatch only, 100% diff** | **~8MP (3840x2160)** | GPU 1286µs vs Rayon 1834µs |
+| **Dispatch only, 0% diff** | Never | Prefilter's memcmp skips identical rows; GPU can't |
+| **With upload** | Never | Transfer overhead (>10ms at 4K) negates compute gains |
+
+Detailed crossover (5% diff, dispatch only vs Rayon+prefilter):
+
+```
+size          pixels   rayon+pf   gpu_dispatch
+256x256       0.07MP       55µs       1329µs   ← Rayon 24x faster
+1024x1024     1.05MP      306µs       1350µs   ← Rayon 4.4x faster
+1920x1080     2.07MP      674µs       1355µs   ← Rayon 2.0x faster
+2048x2048     4.19MP     2682µs       1354µs   ← GPU wins (2.0x)
+3840x2160     8.29MP     2179µs       1510µs   ← GPU wins (1.4x)
+4000x4000    16.00MP     3988µs       2790µs   ← GPU wins (1.4x)
+```
+
+### GPU Readback Overhead
+
+The crossover above assumes **diff count only** (4-byte atomic counter readback). If you need a per-pixel diff heatmap, the readback cost changes drastically:
+
+| Size | Pixels | Heatmap readback | Diff-count readback | Overhead |
+|---|---|---|---|---|
+| 1920x1080 | 2.07MP | 8MB | 4B | **+1.7ms** |
+| 3840x2160 | 8.29MP | 32MB | 4B | **+6.5ms** |
+
+Effective GPU time with heatmap readback (dispatch only, prealloc):
+
+```
+1920x1080:  dispatch 1.35ms + heatmap readback 1.7ms = ~3.0ms  (vs Rayon 674µs → Rayon wins)
+3840x2160:  dispatch 1.51ms + heatmap readback 6.5ms = ~8.0ms  (vs Rayon 2179µs → Rayon wins)
+```
+
+**Heatmap readback erases GPU's compute advantage at all tested sizes.** Practical strategies:
+
+1. **Two-stage pipeline**: GPU dispatch for fast diff-count triage (4B readback). Only generate heatmaps on CPU (Rayon) for the few pairs with diff > 0. In typical VRT, 90%+ of pairs are identical.
+2. **GPU-side rendering**: Keep heatmap on GPU as a texture and render directly (WebGPU in browser). Zero readback cost.
+3. **Partial readback**: Read back only a grid summary (e.g., 64x36 block counts = 9KB) instead of per-pixel data.
+
 ### Key Findings
 
 - **VRT typical case (0% diff)**: `pixelmatch_native` completes 200x200 in **16µs**, WASM prefilter in **208µs**
 - **Row prefilter** skips identical rows with fast memcmp -- up to 25x improvement for nearly-identical images
 - **Native C FFI** with zero-copy `FixedArray[Int]` → `int32_t*` mapping gives 56-86x speedup over pure MoonBit native
 - **Rust Rayon + prefilter** is the fastest portable option at 5.8x over single-threaded CPU
-- **GPU (wgpu)** only wins with pre-allocated buffers at 4K+ resolution; transfer overhead dominates for smaller images
+- **GPU (wgpu)** wins at 4MP+ with pre-allocated buffers for diff-count only, but heatmap readback negates the advantage
+- **Best architecture for batch VRT**: GPU for triage (diff/no-diff), CPU Rayon for heatmap generation on flagged pairs
 
 Run benchmarks: `just bench` (MoonBit) / `just bench-rs` (Rust)
 
