@@ -1,0 +1,5 @@
+import {
+  "mizchi/pixelmatch",
+  "mizchi/image",
+  "moonbitlang/core/bench",
+} for "test"

@@ -434,6 +434,130 @@ fn bench_batch(gpu: &GpuBench, n: usize, width: usize, height: usize, diff_ratio
 // Main
 // ============================================================================
 
+fn bench_gpu_crossover(gpu: &GpuBench, diff_pct: u32) {
+    let diff_ratio = diff_pct as f32 / 100.0;
+    let threshold = 0.1f32;
+    // Test square images from 256 to 8192
+    let sizes: &[(usize, usize, u32)] = &[
+        (256, 256, 200),
+        (512, 512, 100),
+        (1024, 1024, 50),
+        (1920, 1080, 30),
+        (2048, 2048, 20),
+        (3840, 2160, 10),
+        (4000, 4000, 5),   // just under dispatch limit
+    ];
+
+    println!("  {:>12} {:>10} {:>10} {:>10} {:>10}  {:>8}",
+             "size", "pixels", "rayon_pf", "gpu_xfer", "gpu_only", "gpu_win?");
+    println!("  {:->12} {:->10} {:->10} {:->10} {:->10}  {:->8}", "", "", "", "", "", "");
+
+    for &(w, h, iters) in sizes {
+        let total = w * h;
+        let (img1, img2) = generate_test_images(w, h, diff_ratio);
+
+        // Rayon + prefilter
+        let _ = pixelmatch_rayon_prefilter(&img1, &img2, w, h, threshold);
+        let t = Instant::now();
+        for _ in 0..iters {
+            let _ = pixelmatch_rayon_prefilter(&img1, &img2, w, h, threshold);
+        }
+        let rayon_us = t.elapsed().as_micros() as f64 / iters as f64;
+
+        // GPU with transfer
+        let _ = gpu.run_simple(&img1, &img2, w as u32, h as u32, threshold);
+        let t = Instant::now();
+        for _ in 0..iters {
+            let _ = gpu.run_simple(&img1, &img2, w as u32, h as u32, threshold);
+        }
+        let gpu_xfer_us = t.elapsed().as_micros() as f64 / iters as f64;
+
+        // GPU dispatch only (prealloc buffers)
+        let max_delta = 35215.0f32 * threshold.powi(4);
+        let params = Params { width: w as u32, height: h as u32, max_delta, _pad: 0 };
+        let param_buf = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None, contents: bytemuck::bytes_of(&params), usage: wgpu::BufferUsages::UNIFORM,
+        });
+        let img1_buf = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None, contents: bytemuck::cast_slice(&img1), usage: wgpu::BufferUsages::STORAGE,
+        });
+        let img2_buf = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: None, contents: bytemuck::cast_slice(&img2), usage: wgpu::BufferUsages::STORAGE,
+        });
+        // Warmup prealloc
+        {
+            let counter_buf = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None, contents: bytemuck::bytes_of(&0u32),
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            });
+            let rb = gpu.device.create_buffer(&wgpu::BufferDescriptor {
+                label: None, size: 4,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let bg = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None, layout: &gpu.bgl_simple,
+                entries: &[
+                    wgpu::BindGroupEntry { binding: 0, resource: param_buf.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 1, resource: img1_buf.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 2, resource: img2_buf.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 3, resource: counter_buf.as_entire_binding() },
+                ],
+            });
+            let wg = (total as u32 + 255) / 256;
+            let mut enc = gpu.device.create_command_encoder(&Default::default());
+            { let mut p = enc.begin_compute_pass(&Default::default()); p.set_pipeline(&gpu.pipeline_simple); p.set_bind_group(0, &bg, &[]); p.dispatch_workgroups(wg, 1, 1); }
+            enc.copy_buffer_to_buffer(&counter_buf, 0, &rb, 0, 4);
+            gpu.queue.submit(Some(enc.finish()));
+            let slice = rb.slice(..);
+            let (tx, rx) = std::sync::mpsc::channel();
+            slice.map_async(wgpu::MapMode::Read, move |r| { tx.send(r).unwrap(); });
+            let _ = gpu.device.poll(wgpu::PollType::Wait);
+            rx.recv().unwrap().unwrap();
+        }
+        // Measure dispatch only
+        let t = Instant::now();
+        for _ in 0..iters {
+            let counter_buf = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: None, contents: bytemuck::bytes_of(&0u32),
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            });
+            let rb = gpu.device.create_buffer(&wgpu::BufferDescriptor {
+                label: None, size: 4,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let bg = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None, layout: &gpu.bgl_simple,
+                entries: &[
+                    wgpu::BindGroupEntry { binding: 0, resource: param_buf.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 1, resource: img1_buf.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 2, resource: img2_buf.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 3, resource: counter_buf.as_entire_binding() },
+                ],
+            });
+            let wg = (total as u32 + 255) / 256;
+            let mut enc = gpu.device.create_command_encoder(&Default::default());
+            { let mut p = enc.begin_compute_pass(&Default::default()); p.set_pipeline(&gpu.pipeline_simple); p.set_bind_group(0, &bg, &[]); p.dispatch_workgroups(wg, 1, 1); }
+            enc.copy_buffer_to_buffer(&counter_buf, 0, &rb, 0, 4);
+            gpu.queue.submit(Some(enc.finish()));
+            let slice = rb.slice(..);
+            let (tx, rx) = std::sync::mpsc::channel();
+            slice.map_async(wgpu::MapMode::Read, move |r| { tx.send(r).unwrap(); });
+            let _ = gpu.device.poll(wgpu::PollType::Wait);
+            rx.recv().unwrap().unwrap();
+        }
+        let gpu_only_us = t.elapsed().as_micros() as f64 / iters as f64;
+
+        let label = format!("{}x{}", w, h);
+        let mpix = total as f64 / 1_000_000.0;
+        let win = if gpu_only_us < rayon_us { "<< GPU" } else { "" };
+        println!("  {:>12} {:>8.2}MP {:>8.0}µs {:>8.0}µs {:>8.0}µs  {}",
+                 label, mpix, rayon_us, gpu_xfer_us, gpu_only_us, win);
+    }
+    println!();
+}
+
 fn main() {
     println!("=== pixelmatch benchmark (CPU / Rayon / GPU) ===");
     eprintln!("Rayon threads: {}", rayon::current_num_threads());
@@ -441,18 +565,10 @@ fn main() {
     let gpu = GpuBench::new();
     println!();
 
-    println!("--- Single image comparison ---\n");
-    bench_single(&gpu, 200, 200, 0.05, 200);
-    bench_single(&gpu, 800, 600, 0.05, 100);
-    bench_single(&gpu, 1920, 1080, 0.05, 50);
-    bench_single(&gpu, 3840, 2160, 0.05, 20);
-
-    println!("--- Diff ratio sensitivity (1920x1080) ---\n");
-    bench_single(&gpu, 1920, 1080, 0.0, 50);
-    bench_single(&gpu, 1920, 1080, 0.01, 50);
-    bench_single(&gpu, 1920, 1080, 0.50, 20);
-
-    println!("--- Batch VRT simulation (1920x1080, 5% diff) ---\n");
-    bench_batch(&gpu, 10, 1920, 1080, 0.05);
-    bench_batch(&gpu, 50, 1920, 1080, 0.05);
+    println!("--- GPU vs Rayon crossover (5% diff) ---\n");
+    bench_gpu_crossover(&gpu, 5);
+    println!("--- GPU vs Rayon crossover (0% diff / identical) ---\n");
+    bench_gpu_crossover(&gpu, 0);
+    println!("--- GPU vs Rayon crossover (100% diff / all different) ---\n");
+    bench_gpu_crossover(&gpu, 100);
 }

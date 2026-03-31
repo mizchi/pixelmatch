@@ -248,13 +248,19 @@ Compare two images and return the number of different pixels.
 
 Simple comparison without anti-aliasing detection.
 
+### `pixelmatch_fast(img1, img2, threshold) -> Int`
+
+**Recommended for most use cases.** Unified API that dispatches to the fastest implementation per target:
+- **Native**: C FFI with hardware memcmp + LLVM auto-vectorized YIQ delta
+- **JS/WASM**: Row-level prefilter (memcmp-style skip)
+
 ### `pixelmatch_simple_prefilter(img1, img2, threshold) -> Int`
 
-Simple comparison with row-level prefilter. Skips identical rows using fast comparison. Best for VRT where most pixels are unchanged.
+Simple comparison with row-level prefilter. Skips identical rows using fast comparison.
 
 ### `pixelmatch_native(img1, img2, threshold) -> Int` (native target only)
 
-C FFI optimized comparison. Uses hardware memcmp for row skipping and LLVM auto-vectorized YIQ delta.
+C FFI optimized comparison. Called internally by `pixelmatch_fast` on native target.
 
 ### `match_ratio(img1, img2, options) -> Double`
 
