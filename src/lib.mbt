@@ -131,12 +131,12 @@ pub fn pixelmatch(
       let delta = color_delta_at(img1, img2, x, y, false)
       if delta.abs() > max_delta {
         // Check for anti-aliasing
-        if not(options.include_aa) &&
+        if !options.include_aa &&
           (is_antialiased(img1, img2, x, y) || is_antialiased(img2, img1, x, y)) {
           // Anti-aliased pixel
           match output {
             Some(out) =>
-              if not(options.diff_mask) {
+              if !options.diff_mask {
                 out.set_pixel(x, y, options.aa_color)
               }
             None => ()
@@ -160,7 +160,7 @@ pub fn pixelmatch(
         // Similar pixel - draw blended grayscale
         match output {
           Some(out) =>
-            if not(options.diff_mask) {
+            if !options.diff_mask {
               let gray = blend_gray(img1, x, y, options.alpha)
               out.set_pixel(x, y, gray)
             }
@@ -584,7 +584,7 @@ pub fn diff_report(
       let base = (row_offset + x) * 4
       let delta = color_delta_inline(data1, data2, base)
       if delta > max_delta {
-        if not(options.include_aa) &&
+        if !options.include_aa &&
           (is_antialiased(img1, img2, x, y) || is_antialiased(img2, img1, x, y)) {
           aa_count += 1
         } else {
@@ -635,7 +635,7 @@ fn find_diff_regions_flat(
   for y in 0..<height {
     for x in 0..<width {
       let idx = y * width + x
-      if diff_map[idx] && not(visited[idx]) {
+      if diff_map[idx] && !visited[idx] {
         // Found unvisited diff pixel, flood fill to find region
         let mut min_x = x
         let mut max_x = x
@@ -646,7 +646,7 @@ fn find_diff_regions_flat(
         let stack : Array[Int] = [idx]
         while stack.length() > 0 {
           let cidx = stack.pop().unwrap()
-          if visited[cidx] || not(diff_map[cidx]) {
+          if visited[cidx] || !diff_map[cidx] {
             continue
           }
           visited[cidx] = true
@@ -874,7 +874,7 @@ fn detect_shape_hints(
       if grid[r][c] > 0 {
         // Check if it's only on edges
         let on_edge = r < 2 || r >= rows - 2 || c < 2 || c >= cols - 2
-        if not(on_edge) {
+        if !on_edge {
           is_border = false
         }
       }
