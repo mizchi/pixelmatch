@@ -23,3 +23,59 @@ jobs:
         run: moon check --deny-warn
       - name: Moon test
         run: moon test
+
+  bench:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # MoonBit bench
+      - name: Install MoonBit CLI
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Moon update
+        run: moon update
+      - name: MoonBit bench
+        run: moon bench --target js 2>&1 | tee moonbit-bench.txt
+
+      # Rust bench (CPU only on Linux — no GPU in CI)
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cargo cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            bench_rs/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('bench_rs/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Build Rust bench
+        run: cargo build --release
+        working-directory: bench_rs
+      - name: Run Rust bench
+        run: ./target/release/pixelmatch-bench 2>&1 | tee ../rust-bench.txt
+        working-directory: bench_rs
+        continue-on-error: true  # GPU may not be available in CI
+
+      # Summary
+      - name: Bench summary
+        run: |
+          echo "## Benchmark Results (${{ matrix.os }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### MoonBit (WASM/JS)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat moonbit-bench.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f rust-bench.txt ]; then
+            echo "### Rust (CPU / Rayon / GPU)" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat rust-bench.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi

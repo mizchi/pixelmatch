@@ -44,6 +44,54 @@ test "bench: identical 500x500" (b : @bench.T) {
 }
 
 ///|
+/// Prefilter: identical images (best case — all rows skipped)
+test "bench: prefilter identical 200x200" (b : @bench.T) {
+  let img1 = Image::new(200, 200)
+  let img2 = Image::new(200, 200)
+  for y in 0..<200 {
+    for x in 0..<200 {
+      img1.set_pixel(x, y, Color::rgba(100, 100, 100, 255))
+      img2.set_pixel(x, y, Color::rgba(100, 100, 100, 255))
+    }
+  }
+  b.bench(() => b.keep(pixelmatch_simple_prefilter(img1, img2, 0.1)))
+}
+
+///|
+/// Prefilter: 5% diff rows (typical VRT)
+test "bench: prefilter 5pct 200x200" (b : @bench.T) {
+  let img1 = Image::new(200, 200)
+  let img2 = Image::new(200, 200)
+  for y in 0..<200 {
+    for x in 0..<200 {
+      img1.set_pixel(x, y, Color::rgba(100, 100, 100, 255))
+      img2.set_pixel(x, y, Color::rgba(100, 100, 100, 255))
+    }
+  }
+  // Make first 10 rows different (5%)
+  for y in 0..<10 {
+    for x in 0..<200 {
+      img2.set_pixel(x, y, Color::rgba(255, 0, 0, 255))
+    }
+  }
+  b.bench(() => b.keep(pixelmatch_simple_prefilter(img1, img2, 0.1)))
+}
+
+///|
+/// Prefilter: identical 500x500 (stress)
+test "bench: prefilter identical 500x500" (b : @bench.T) {
+  let img1 = Image::new(500, 500)
+  let img2 = Image::new(500, 500)
+  for y in 0..<500 {
+    for x in 0..<500 {
+      img1.set_pixel(x, y, Color::rgba(100, 100, 100, 255))
+      img2.set_pixel(x, y, Color::rgba(100, 100, 100, 255))
+    }
+  }
+  b.bench(() => b.keep(pixelmatch_simple_prefilter(img1, img2, 0.1)))
+}
+
+///|
 /// Completely different images (worst case for delta calc)
 test "bench: different 200x200" (b : @bench.T) {
   let img1 = Image::new(200, 200)

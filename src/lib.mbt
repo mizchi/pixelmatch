@@ -457,6 +457,50 @@ pub fn pixelmatch_simple(img1 : Image, img2 : Image, threshold : Double) -> Int 
 }
 
 ///|
+/// Simple comparison with row-level prefilter optimization.
+/// Skips entire rows where all pixels are identical (common in VRT screenshots).
+/// Falls back to per-pixel delta for rows with differences.
+pub fn pixelmatch_simple_prefilter(
+  img1 : Image,
+  img2 : Image,
+  threshold : Double,
+) -> Int {
+  if img1.width != img2.width || img1.height != img2.height {
+    abort("Image dimensions must match")
+  }
+  let max_delta = 35215.0 * threshold * threshold * threshold * threshold
+  let width = img1.width
+  let height = img1.height
+  let data1 = img1.data
+  let data2 = img2.data
+  let mut diff_count = 0
+  for y in 0..<height {
+    let row_start = y * width * 4
+    let row_end = row_start + width * 4
+    // Fast path: check if entire row is identical
+    let mut row_identical = true
+    for i = row_start; i < row_end; i = i + 1 {
+      if data1[i] != data2[i] {
+        row_identical = false
+        break
+      }
+    }
+    if row_identical {
+      continue
+    }
+    // Slow path: compute per-pixel delta for this row
+    for x in 0..<width {
+      let base = row_start + x * 4
+      let delta = color_delta_inline(data1, data2, base)
+      if delta > max_delta {
+        diff_count += 1
+      }
+    }
+  }
+  diff_count
+}
+
+///|
 /// Calculate match ratio (0.0 = completely different, 1.0 = identical)
 pub fn match_ratio(img1 : Image, img2 : Image, options : Options) -> Double {
   let total = img1.width * img1.height

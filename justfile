@@ -34,5 +34,17 @@ info:
 clean:
     moon clean
 
+# MoonBit benchmarks
+bench:
+    moon bench --target {{target}}
+
+# Rust benchmarks (CPU / Rayon / GPU)
+bench-rs:
+    cd bench_rs && cargo run --release
+
+# Build Rust bench
+build-rs:
+    cd bench_rs && cargo build --release
+
 # Pre-release check
 release-check: fmt info check test
