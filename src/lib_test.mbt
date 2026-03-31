@@ -138,6 +138,57 @@ test "Image::from_pixels" {
 }
 
 ///|
+test "pixelmatch_simple_prefilter identical" {
+  let img1 = Image::new(10, 10)
+  let img2 = Image::new(10, 10)
+  for i in 0..<(10 * 10 * 4) {
+    img1.data[i] = 128
+    img2.data[i] = 128
+  }
+  let diff = pixelmatch_simple_prefilter(img1, img2, 0.1)
+  assert_eq(diff, 0)
+}
+
+///|
+test "pixelmatch_simple_prefilter partial diff" {
+  let img1 = Image::new(10, 10)
+  let img2 = Image::new(10, 10)
+  for y in 0..<10 {
+    for x in 0..<10 {
+      img1.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+      img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+    }
+  }
+  // Make top-left quarter white in img2
+  for y in 0..<5 {
+    for x in 0..<5 {
+      img2.set_pixel(x, y, Color::rgba(255, 255, 255, 255))
+    }
+  }
+  let diff = pixelmatch_simple_prefilter(img1, img2, 0.1)
+  assert_eq(diff, 25)
+}
+
+///|
+test "pixelmatch_simple_prefilter matches pixelmatch_simple" {
+  let img1 = Image::new(20, 20)
+  let img2 = Image::new(20, 20)
+  for y in 0..<20 {
+    for x in 0..<20 {
+      img1.set_pixel(x, y, Color::rgba(50, 100, 150, 255))
+      img2.set_pixel(x, y, Color::rgba(50, 100, 150, 255))
+    }
+  }
+  // Scatter some diffs
+  img2.set_pixel(3, 7, Color::rgba(255, 0, 0, 255))
+  img2.set_pixel(15, 2, Color::rgba(0, 255, 0, 255))
+  img2.set_pixel(10, 10, Color::rgba(0, 0, 255, 255))
+  let simple = pixelmatch_simple(img1, img2, 0.1)
+  let prefilter = pixelmatch_simple_prefilter(img1, img2, 0.1)
+  assert_eq(simple, prefilter)
+}
+
+///|
 test "Color constructors" {
   let c1 = Color::rgba(10, 20, 30, 40)
   assert_eq(c1.r, 10)

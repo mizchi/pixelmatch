@@ -10,6 +10,8 @@ pub fn pixelmatch(Image, Image, Image?, Options) -> Int
 
 pub fn pixelmatch_simple(Image, Image, Double) -> Int
 
+pub fn pixelmatch_simple_prefilter(Image, Image, Double) -> Int
+
 // Errors
 
 // Types and methods
@@ -52,7 +54,7 @@ pub fn DiffReport::to_text(Self) -> String
 pub(all) struct Image {
   width : Int
   height : Int
-  data : Array[Int]
+  data : FixedArray[Int]
 }
 pub fn Image::from_pixels(Int, Int, Array[Color]) -> Self
 pub fn Image::get_pixel(Self, Int, Int) -> Color

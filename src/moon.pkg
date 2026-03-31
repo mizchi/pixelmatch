@@ -1,3 +1,13 @@
 import {
   "moonbitlang/core/bench",
 }
+
+options(
+  "native-stub": [ "stub.c" ],
+  "cc-flags": "-O2",
+  targets: {
+    "lib_native.mbt": [ "native" ],
+    "lib_nonnative.mbt": [ "not", "native" ],
+    "bench_native_test.mbt": [ "native" ],
+  },
+)
