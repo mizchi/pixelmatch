@@ -26,13 +26,13 @@ pub fn Color::rgb(r : Int, g : Int, b : Int) -> Color {
 pub(all) struct Image {
   width : Int
   height : Int
-  data : Array[Int] // [r, g, b, a, r, g, b, a, ...]
+  data : FixedArray[Int] // [r, g, b, a, r, g, b, a, ...]
 }
 
 ///|
 pub fn Image::new(width : Int, height : Int) -> Image {
   let size = width * height * 4
-  { width, height, data: Array::make(size, 0) }
+  { width, height, data: FixedArray::make(size, 0) }
 }
 
 ///|
@@ -41,7 +41,7 @@ pub fn Image::from_pixels(
   height : Int,
   pixels : Array[Color],
 ) -> Image {
-  let data = Array::make(width * height * 4, 0)
+  let data = FixedArray::make(width * height * 4, 0)
   for i, pixel in pixels {
     let base = i * 4
     data[base] = pixel.r
@@ -379,8 +379,8 @@ fn blend_gray(img : Image, x : Int, y : Int, alpha : Double) -> Color {
 /// Inline color delta calculation for maximum performance
 /// Returns absolute delta value (always positive)
 fn color_delta_inline(
-  data1 : Array[Int],
-  data2 : Array[Int],
+  data1 : FixedArray[Int],
+  data2 : FixedArray[Int],
   base : Int,
 ) -> Double {
   let r1 = data1[base]

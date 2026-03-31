@@ -155,6 +155,43 @@ let report = diff_report(img1, img2, options, grid_size=20)
 
 **Recommendation:** Use `to_compact_with_hints()` for best accuracy/token ratio.
 
+## Performance
+
+### MoonBit Targets (200x200, identical images, Apple M5)
+
+| Implementation | JS (V8) | WASM | Native |
+|---|---|---|---|
+| `pixelmatch_simple` | 311µs | 372µs | 1450µs |
+| `pixelmatch_simple_prefilter` | 288µs | 208µs | 263µs |
+| `pixelmatch_native` (C FFI) | N/A | N/A | **16.78µs** |
+
+### MoonBit Targets (200x200, all different, Apple M5)
+
+| Implementation | JS (V8) | WASM | Native |
+|---|---|---|---|
+| `pixelmatch_simple` | 328µs | 371µs | 1180µs |
+| `pixelmatch_native` (C FFI) | N/A | N/A | **51.56µs** |
+
+### Rust Benchmark (1920x1080, 5% diff, Apple M5)
+
+| Implementation | Time | vs CPU baseline |
+|---|---|---|
+| CPU simple | 2326µs | 1.0x |
+| CPU prefilter | 2338µs | 1.0x |
+| Rayon (10 threads) | 550µs | 4.2x |
+| Rayon + prefilter | 400µs | **5.8x** |
+| GPU (wgpu, incl. transfer) | 4182µs | 0.6x |
+
+### Key Findings
+
+- **VRT typical case (0% diff)**: `pixelmatch_native` completes 200x200 in **16µs**, WASM prefilter in **208µs**
+- **Row prefilter** skips identical rows with fast memcmp -- up to 25x improvement for nearly-identical images
+- **Native C FFI** with zero-copy `FixedArray[Int]` → `int32_t*` mapping gives 56-86x speedup over pure MoonBit native
+- **Rust Rayon + prefilter** is the fastest portable option at 5.8x over single-threaded CPU
+- **GPU (wgpu)** only wins with pre-allocated buffers at 4K+ resolution; transfer overhead dominates for smaller images
+
+Run benchmarks: `just bench` (MoonBit) / `just bench-rs` (Rust)
+
 ## API
 
 ### `pixelmatch(img1, img2, output?, options) -> Int`
@@ -164,6 +201,14 @@ Compare two images and return the number of different pixels.
 ### `pixelmatch_simple(img1, img2, threshold) -> Int`
 
 Simple comparison without anti-aliasing detection.
+
+### `pixelmatch_simple_prefilter(img1, img2, threshold) -> Int`
+
+Simple comparison with row-level prefilter. Skips identical rows using fast comparison. Best for VRT where most pixels are unchanged.
+
+### `pixelmatch_native(img1, img2, threshold) -> Int` (native target only)
+
+C FFI optimized comparison. Uses hardware memcmp for row skipping and LLVM auto-vectorized YIQ delta.
 
 ### `match_ratio(img1, img2, options) -> Double`
 
