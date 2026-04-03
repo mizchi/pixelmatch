@@ -3,3 +3,7 @@ import {
   "mizchi/image",
   "moonbitlang/core/bench",
 } for "test"
+
+options(
+  link: { "native": { "cc-link-flags": "-lz" } },
+)

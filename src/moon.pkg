@@ -3,11 +3,12 @@ import {
 }
 
 options(
-  "native-stub": [ "stub.c" ],
   "cc-flags": "-O2",
+  link: { "native": { "cc-link-flags": "-lz" } },
+  "native-stub": [ "stub.c" ],
   targets: {
+    "bench_native_test.mbt": [ "native" ],
     "lib_native.mbt": [ "native" ],
     "lib_nonnative.mbt": [ "not", "native" ],
-    "bench_native_test.mbt": [ "native" ],
   },
 )

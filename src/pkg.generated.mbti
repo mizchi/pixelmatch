@@ -8,6 +8,8 @@ pub fn match_ratio(Image, Image, Options) -> Double
 
 pub fn pixelmatch(Image, Image, Image?, Options) -> Int
 
+pub fn pixelmatch_fast(Image, Image, Double) -> Int
+
 pub fn pixelmatch_simple(Image, Image, Double) -> Int
 
 pub fn pixelmatch_simple_prefilter(Image, Image, Double) -> Int
@@ -20,11 +22,9 @@ pub(all) struct Color {
   g : Int
   b : Int
   a : Int
-}
+} derive(Eq, Show)
 pub fn Color::rgb(Int, Int, Int) -> Self
 pub fn Color::rgba(Int, Int, Int, Int) -> Self
-pub impl Eq for Color
-pub impl Show for Color
 
 pub(all) struct DiffRegion {
   x : Int

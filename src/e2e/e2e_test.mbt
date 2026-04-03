@@ -129,24 +129,27 @@ test "e2e: full pipeline 200x200" (b : @bench.T) {
     data: Bytes::from_array(buf2),
   }
 
-  let png1 = try { @image.encode_png(img1_raw) } catch { _ => panic() }
-  let png2 = try { @image.encode_png(img2_mod) } catch { _ => panic() }
+  let png1 = @image.encode_png(img1_raw) catch { _ => panic() }
+  let png2 = @image.encode_png(img2_mod) catch { _ => panic() }
 
   b.bench(fn() {
     // Decode
-    let d1 = try { @image.decode_png(png1) } catch { _ => panic() }
-    let d2 = try { @image.decode_png(png2) } catch { _ => panic() }
+    let d1 = @image.decode_png(png1) catch { _ => panic() }
+    let d2 = @image.decode_png(png2) catch { _ => panic() }
     // Convert
     let pm1 = image_data_to_image(d1)
     let pm2 = image_data_to_image(d2)
     let out = @pixelmatch.Image::new(w, h)
     // Compare
     let diff = @pixelmatch.pixelmatch(
-      pm1, pm2, Some(out), @pixelmatch.Options::default(),
+      pm1,
+      pm2,
+      Some(out),
+      @pixelmatch.Options::default(),
     )
     // Encode diff PNG
     let diff_data = image_to_image_data(out)
-    let diff_png = try { @image.encode_png(diff_data) } catch { _ => panic() }
+    let diff_png = @image.encode_png(diff_data) catch { _ => panic() }
     b.keep(diff + diff_png.length())
   })
 }
@@ -156,7 +159,7 @@ test "e2e: full pipeline 200x200" (b : @bench.T) {
 test "e2e: png encode 200x200" (b : @bench.T) {
   let img = make_solid(200, 200, 128, 128, 128)
   b.bench(fn() {
-    let png = try { @image.encode_png(img) } catch { _ => panic() }
+    let png = @image.encode_png(img) catch { _ => panic() }
     b.keep(png.length())
   })
 }
@@ -165,9 +168,9 @@ test "e2e: png encode 200x200" (b : @bench.T) {
 /// Benchmark: PNG decode only
 test "e2e: png decode 200x200" (b : @bench.T) {
   let img = make_solid(200, 200, 128, 128, 128)
-  let png = try { @image.encode_png(img) } catch { _ => panic() }
+  let png = @image.encode_png(img) catch { _ => panic() }
   b.bench(fn() {
-    let decoded = try { @image.decode_png(png) } catch { _ => panic() }
+    let decoded = @image.decode_png(png) catch { _ => panic() }
     b.keep(decoded.width)
   })
 }
@@ -190,9 +193,7 @@ test "e2e: pixelmatch only 200x200" (b : @bench.T) {
   }
   let out = @pixelmatch.Image::new(200, 200)
   let opts = @pixelmatch.Options::default()
-  b.bench(fn() {
-    b.keep(@pixelmatch.pixelmatch(img1, img2, Some(out), opts))
-  })
+  b.bench(fn() { b.keep(@pixelmatch.pixelmatch(img1, img2, Some(out), opts)) })
 }
 
 ///|
@@ -211,7 +212,5 @@ test "e2e: pixelmatch_fast 200x200" (b : @bench.T) {
       img2.set_pixel(x, y, @pixelmatch.Color::rgba(255, 0, 0, 255))
     }
   }
-  b.bench(fn() {
-    b.keep(@pixelmatch.pixelmatch_fast(img1, img2, 0.1))
-  })
+  b.bench(fn() { b.keep(@pixelmatch.pixelmatch_fast(img1, img2, 0.1)) })
 }

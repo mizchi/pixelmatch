@@ -22,24 +22,17 @@ extern "C" fn c_row_diff_count(
 ///|
 /// Native-optimized pixelmatch using C memcmp + C YIQ delta.
 /// Zero-copy: FixedArray[Int] is passed directly as int32_t* to C.
+
 ///|
 /// Fastest available simple comparison for this target.
 /// On native: C FFI with hardware memcmp + LLVM auto-vectorized YIQ delta.
 /// On JS/WASM: falls back to pixelmatch_simple_prefilter (defined in lib_nonjs.mbt).
-pub fn pixelmatch_fast(
-  img1 : Image,
-  img2 : Image,
-  threshold : Double,
-) -> Int {
+pub fn pixelmatch_fast(img1 : Image, img2 : Image, threshold : Double) -> Int {
   pixelmatch_native(img1, img2, threshold)
 }
 
 ///|
-pub fn pixelmatch_native(
-  img1 : Image,
-  img2 : Image,
-  threshold : Double,
-) -> Int {
+pub fn pixelmatch_native(img1 : Image, img2 : Image, threshold : Double) -> Int {
   if img1.width != img2.width || img1.height != img2.height {
     abort("Image dimensions must match")
   }
