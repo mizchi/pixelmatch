@@ -562,10 +562,11 @@ pub(all) struct ShiftRegion {
 
 ///|
 /// Compute average luminance (Y channel) per row
-pub fn luminance_profile(img : Image) -> Array[Double] {
-  let profile : Array[Double] = Array::make(img.height, 0.0)
+pub fn luminance_profile(img : Image) -> FixedArray[Double] {
+  let profile : FixedArray[Double] = FixedArray::make(img.height, 0.0)
   let data = img.data
   let width = img.width
+  let inv_width = 1.0 / width.to_double()
   for y in 0..<img.height {
     let mut sum = 0.0
     let row_base = y * width * 4
@@ -576,17 +577,47 @@ pub fn luminance_profile(img : Image) -> Array[Double] {
       let b = data[base + 2].to_double()
       sum += 0.299 * r + 0.587 * g + 0.114 * b
     }
-    profile[y] = sum / width.to_double()
+    profile[y] = sum * inv_width
   }
   profile
 }
 
 ///|
-/// Detect global vertical shift via normalized cross-correlation
+/// Compute normalized cross-correlation at a specific offset
+fn cross_correlate_at(
+  profile1 : FixedArray[Double],
+  off1 : Int,
+  profile2 : FixedArray[Double],
+  off2 : Int,
+  len1 : Int,
+  len2 : Int,
+  offset : Int,
+) -> Double {
+  let mut sum_xy = 0.0
+  let mut sum_xx = 0.0
+  let mut sum_yy = 0.0
+  let start = if offset > 0 { offset } else { 0 }
+  let n = if len1 < len2 { len1 } else { len2 }
+  let end = if offset > 0 { n } else { n + offset }
+  for i in start..<end {
+    let j = i - offset
+    let x = profile1[off1 + j]
+    let y = profile2[off2 + i]
+    sum_xy += x * y
+    sum_xx += x * x
+    sum_yy += y * y
+  }
+  let denom = (sum_xx * sum_yy).sqrt()
+  if denom > 0.0 { sum_xy / denom } else { 0.0 }
+}
+
+///|
+/// Detect global vertical shift via two-phase cross-correlation
+/// Phase 1: coarse search with stride, Phase 2: refine around best
 /// Returns offset (positive = img2 shifted down relative to img1)
 pub fn detect_global_shift(
-  profile1 : Array[Double],
-  profile2 : Array[Double],
+  profile1 : FixedArray[Double],
+  profile2 : FixedArray[Double],
   max_shift : Int,
 ) -> Int {
   let n = profile1.length()
@@ -594,25 +625,49 @@ pub fn detect_global_shift(
     return 0
   }
   let limit = if max_shift < n / 4 { max_shift } else { n / 4 }
+  // For small ranges, do a direct scan
+  if limit <= 16 {
+    let mut best_corr = -1.0
+    let mut best_offset = 0
+    let mut offset = -limit
+    while offset <= limit {
+      let corr = cross_correlate_at(profile1, 0, profile2, 0, n, n, offset)
+      if corr > best_corr {
+        best_corr = corr
+        best_offset = offset
+      }
+      offset += 1
+    }
+    return best_offset
+  }
+  // Phase 1: coarse search with stride
+  let stride = if limit > 64 { limit / 16 } else { 4 }
   let mut best_corr = -1.0
-  let mut best_offset = 0
+  let mut coarse_best = 0
   let mut offset = -limit
   while offset <= limit {
-    let mut sum_xy = 0.0
-    let mut sum_xx = 0.0
-    let mut sum_yy = 0.0
-    let start = if offset > 0 { offset } else { 0 }
-    let end = if offset > 0 { n } else { n + offset }
-    for i in start..<end {
-      let j = i - offset
-      let x = profile1[j]
-      let y = profile2[i]
-      sum_xy += x * y
-      sum_xx += x * x
-      sum_yy += y * y
+    let corr = cross_correlate_at(profile1, 0, profile2, 0, n, n, offset)
+    if corr > best_corr {
+      best_corr = corr
+      coarse_best = offset
     }
-    let denom = (sum_xx * sum_yy).sqrt()
-    let corr = if denom > 0.0 { sum_xy / denom } else { 0.0 }
+    offset += stride
+  }
+  // Phase 2: refine within ±stride of coarse best
+  let refine_lo = if coarse_best - stride > -limit {
+    coarse_best - stride
+  } else {
+    -limit
+  }
+  let refine_hi = if coarse_best + stride < limit {
+    coarse_best + stride
+  } else {
+    limit
+  }
+  let mut best_offset = coarse_best
+  offset = refine_lo
+  while offset <= refine_hi {
+    let corr = cross_correlate_at(profile1, 0, profile2, 0, n, n, offset)
     if corr > best_corr {
       best_corr = corr
       best_offset = offset
@@ -623,10 +678,62 @@ pub fn detect_global_shift(
 }
 
 ///|
+/// Detect shift for a window slice of the profiles (no array copy)
+fn detect_window_shift(
+  profile1 : FixedArray[Double],
+  profile2 : FixedArray[Double],
+  offset : Int,
+  len : Int,
+  max_shift : Int,
+) -> Int {
+  let limit = if max_shift < len / 4 { max_shift } else { len / 4 }
+  let mut best_corr = -1.0
+  let mut best_offset = 0
+  // For windows, limit is usually small enough for direct scan
+  if limit <= 16 {
+    let mut off = -limit
+    while off <= limit {
+      let corr = cross_correlate_at(profile1, offset, profile2, offset, len, len, off)
+      if corr > best_corr {
+        best_corr = corr
+        best_offset = off
+      }
+      off += 1
+    }
+    return best_offset
+  }
+  // Two-phase for larger limits
+  let stride = if limit > 64 { limit / 16 } else { 4 }
+  let mut coarse_best = 0
+  let mut off = -limit
+  while off <= limit {
+    let corr = cross_correlate_at(profile1, offset, profile2, offset, len, len, off)
+    if corr > best_corr {
+      best_corr = corr
+      coarse_best = off
+    }
+    off += stride
+  }
+  let refine_lo = if coarse_best - stride > -limit { coarse_best - stride } else { -limit }
+  let refine_hi = if coarse_best + stride < limit { coarse_best + stride } else { limit }
+  best_offset = coarse_best
+  off = refine_lo
+  while off <= refine_hi {
+    let corr = cross_correlate_at(profile1, offset, profile2, offset, len, len, off)
+    if corr > best_corr {
+      best_corr = corr
+      best_offset = off
+    }
+    off += 1
+  }
+  best_offset
+}
+
+///|
 /// Detect piecewise vertical shifts using sliding window cross-correlation
 pub fn detect_piecewise_shift(
-  profile1 : Array[Double],
-  profile2 : Array[Double],
+  profile1 : FixedArray[Double],
+  profile2 : FixedArray[Double],
   max_shift : Int,
   window_size~ : Int = 100,
 ) -> Array[ShiftRegion] {
@@ -644,13 +751,7 @@ pub fn detect_piecewise_shift(
     if len < 4 {
       break
     }
-    let w1 : Array[Double] = Array::make(len, 0.0)
-    let w2 : Array[Double] = Array::make(len, 0.0)
-    for i in 0..<len {
-      w1[i] = profile1[y + i]
-      w2[i] = profile2[y + i]
-    }
-    let shift = detect_global_shift(w1, w2, max_shift)
+    let shift = detect_window_shift(profile1, profile2, y, len, max_shift)
     window_shifts.push((y, end, shift))
     y += step
   }
@@ -719,7 +820,7 @@ fn color_delta_inline2(
 }
 
 ///|
-fn compensated_diff(
+pub fn compensated_diff(
   img1 : Image,
   img2 : Image,
   shift_regions : Array[ShiftRegion],
@@ -740,6 +841,18 @@ fn compensated_diff(
       }
       let row1 = src_y * width * 4
       let row2 = y * width * 4
+      // Row prefilter: skip if rows are identical after shift
+      let row_len = width * 4
+      let mut row_identical = true
+      for i in 0..<row_len {
+        if data1[row1 + i] != data2[row2 + i] {
+          row_identical = false
+          break
+        }
+      }
+      if row_identical {
+        continue
+      }
       for x in 0..<width {
         let base1 = row1 + x * 4
         let base2 = row2 + x * 4
@@ -790,6 +903,19 @@ pub fn diff_report(
   let data2 = img2.data
   for y in 0..<height {
     let row_offset = y * width
+    let row_start = row_offset * 4
+    let row_end = row_start + width * 4
+    // Row prefilter: skip identical rows entirely
+    let mut row_identical = true
+    for i = row_start; i < row_end; i = i + 1 {
+      if data1[i] != data2[i] {
+        row_identical = false
+        break
+      }
+    }
+    if row_identical {
+      continue
+    }
     for x in 0..<width {
       let base = (row_offset + x) * 4
       let delta = color_delta_inline(data1, data2, base)
