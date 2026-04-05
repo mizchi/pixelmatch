@@ -393,6 +393,10 @@ fn color_delta_inline(
   let g2 = data2[base + 1]
   let b2 = data2[base + 2]
   let a2 = data2[base + 3]
+  // Early exit for identical pixels
+  if r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2 {
+    return 0.0
+  }
   // Fast path: both fully opaque (most common case)
   let (rf1, gf1, bf1, rf2, gf2, bf2) : (
     Double,
@@ -431,8 +435,7 @@ fn color_delta_inline(
   let y = 0.29889531 * dr + 0.58662247 * dg + 0.11448223 * db
   let i = 0.59597799 * dr - 0.27417610 * dg - 0.32180189 * db
   let q = 0.21147017 * dr - 0.52261711 * dg + 0.31114694 * db
-  let delta = 0.5053 * y * y + 0.299 * i * i + 0.1957 * q * q
-  delta
+  0.5053 * y * y + 0.299 * i * i + 0.1957 * q * q
 }
 
 ///|
@@ -793,6 +796,10 @@ fn color_delta_inline2(
   let g2 = data2[base2 + 1]
   let b2 = data2[base2 + 2]
   let a2 = data2[base2 + 3]
+  // Early exit for identical pixels
+  if r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2 {
+    return 0.0
+  }
   let (rf1, gf1, bf1, rf2, gf2, bf2) : (Double, Double, Double, Double, Double, Double) = if a1 == a2 &&
     a1 == 255 {
     (
@@ -898,7 +905,7 @@ pub fn diff_report(
   // Collect diff pixels - use flat array for diff_map
   let mut diff_count = 0
   let mut aa_count = 0
-  let diff_map : Array[Bool] = Array::make(width * height, false)
+  let diff_map : FixedArray[Bool] = FixedArray::make(width * height, false)
   let data1 = img1.data
   let data2 = img2.data
   for y in 0..<height {
@@ -1003,12 +1010,12 @@ fn classify_region(region : DiffRegion, image_width : Int) -> String {
 /// Find bounding boxes of diff regions using connected component labeling
 /// Optimized: use flat arrays, check bounds before push
 fn find_diff_regions_flat(
-  diff_map : Array[Bool],
+  diff_map : FixedArray[Bool],
   width : Int,
   height : Int,
 ) -> Array[DiffRegion] {
   let size = width * height
-  let visited : Array[Bool] = Array::make(size, false)
+  let visited : FixedArray[Bool] = FixedArray::make(size, false)
   let regions : Array[DiffRegion] = []
   for y in 0..<height {
     for x in 0..<width {
