@@ -281,3 +281,123 @@ test "diff_report to_json" {
   assert_true(json.contains("\"diff_count\": 0"))
   assert_true(json.contains("\"match_ratio\": 1"))
 }
+
+///|
+test "diff_report classifies shift region" {
+  let img1 = Image::new(100, 20)
+  let img2 = Image::new(100, 20)
+  for y in 0..<20 {
+    for x in 0..<100 {
+      img1.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+      img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+    }
+  }
+  for y in 5..<10 {
+    for x in 0..<100 {
+      img2.set_pixel(x, y, Color::rgba(255, 255, 255, 255))
+    }
+  }
+  let report = diff_report(img1, img2, Options::default())
+  assert_true(report.regions.length() >= 1)
+  assert_eq(report.regions[0].region_type, "shift")
+}
+
+///|
+test "diff_report classifies content region" {
+  let img1 = Image::new(100, 100)
+  let img2 = Image::new(100, 100)
+  for y in 0..<100 {
+    for x in 0..<100 {
+      img1.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+      img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+    }
+  }
+  for y in 20..<30 {
+    for x in 20..<30 {
+      img2.set_pixel(x, y, Color::rgba(255, 255, 255, 255))
+    }
+  }
+  let report = diff_report(img1, img2, Options::default())
+  assert_true(report.regions.length() >= 1)
+  assert_eq(report.regions[0].region_type, "content")
+}
+
+///|
+test "diff_report classifies edge region" {
+  let img1 = Image::new(100, 100)
+  let img2 = Image::new(100, 100)
+  for y in 0..<100 {
+    for x in 0..<100 {
+      img1.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+      img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+    }
+  }
+  for x in 20..<30 {
+    img2.set_pixel(x, 50, Color::rgba(255, 255, 255, 255))
+  }
+  let report = diff_report(img1, img2, Options::default())
+  assert_true(report.regions.length() >= 1)
+  assert_eq(report.regions[0].region_type, "edge")
+}
+
+///|
+test "diff_report shift_only true when all regions are shift" {
+  let img1 = Image::new(100, 20)
+  let img2 = Image::new(100, 20)
+  for y in 0..<20 {
+    for x in 0..<100 {
+      img1.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+      img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+    }
+  }
+  for y in 5..<10 {
+    for x in 0..<100 {
+      img2.set_pixel(x, y, Color::rgba(255, 255, 255, 255))
+    }
+  }
+  let report = diff_report(img1, img2, Options::default())
+  assert_true(report.shift_only)
+  assert_eq(report.content_change_count, 0)
+}
+
+///|
+test "diff_report shift_only false when content region exists" {
+  let img1 = Image::new(100, 100)
+  let img2 = Image::new(100, 100)
+  for y in 0..<100 {
+    for x in 0..<100 {
+      img1.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+      img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+    }
+  }
+  for y in 20..<30 {
+    for x in 20..<30 {
+      img2.set_pixel(x, y, Color::rgba(255, 255, 255, 255))
+    }
+  }
+  let report = diff_report(img1, img2, Options::default())
+  assert_false(report.shift_only)
+  assert_eq(report.content_change_count, 1)
+}
+
+///|
+test "diff_report to_json includes region_type" {
+  let img1 = Image::new(100, 100)
+  let img2 = Image::new(100, 100)
+  for y in 0..<100 {
+    for x in 0..<100 {
+      img1.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+      img2.set_pixel(x, y, Color::rgba(0, 0, 0, 255))
+    }
+  }
+  for y in 20..<30 {
+    for x in 20..<30 {
+      img2.set_pixel(x, y, Color::rgba(255, 255, 255, 255))
+    }
+  }
+  let report = diff_report(img1, img2, Options::default())
+  let json = report.to_json()
+  assert_true(json.contains("\"region_type\": \"content\""))
+  assert_true(json.contains("\"shift_only\": false"))
+  assert_true(json.contains("\"content_change_count\": 1"))
+}

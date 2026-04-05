@@ -523,6 +523,7 @@ pub(all) struct DiffRegion {
   width : Int
   height : Int
   diff_pixels : Int
+  region_type : String // "shift" | "content" | "edge"
 }
 
 ///|
@@ -541,6 +542,9 @@ pub(all) struct DiffReport {
   grid_rows : Int
   // Diff regions (bounding boxes of clustered differences)
   regions : Array[DiffRegion]
+  // Classification summary
+  shift_only : Bool
+  content_change_count : Int
 }
 
 ///|
@@ -607,6 +611,18 @@ pub fn diff_report(
   } else {
     1.0
   }
+  // Compute classification summary
+  let mut content_change_count = 0
+  let mut has_non_shift = false
+  for region in regions {
+    if region.region_type == "content" {
+      content_change_count += 1
+      has_non_shift = true
+    } else if region.region_type == "edge" {
+      has_non_shift = true
+    }
+  }
+  let shift_only = regions.length() > 0 && !has_non_shift
   {
     width,
     height,
@@ -618,6 +634,21 @@ pub fn diff_report(
     grid_cols,
     grid_rows,
     regions,
+    shift_only,
+    content_change_count,
+  }
+}
+
+///|
+/// Classify a diff region as "shift", "content", or "edge"
+fn classify_region(region : DiffRegion, image_width : Int) -> String {
+  if region.height <= 2 || region.width <= 2 {
+    "edge"
+  } else if region.width.to_double() / region.height.to_double() > 3.0 &&
+    region.width > image_width * 80 / 100 {
+    "shift"
+  } else {
+    "content"
   }
 }
 
@@ -680,13 +711,17 @@ fn find_diff_regions_flat(
           }
         }
         if pixel_count > 0 {
-          regions.push({
+          let region : DiffRegion = {
             x: min_x,
             y: min_y,
             width: max_x - min_x + 1,
             height: max_y - min_y + 1,
             diff_pixels: pixel_count,
-          })
+            region_type: "",
+          }
+          regions.push(
+            { ..region, region_type: classify_region(region, width) },
+          )
         }
       }
     }
@@ -769,6 +804,7 @@ pub fn DiffReport::to_text(self : DiffReport) -> String {
     s += "\nDiff Regions (" + self.regions.length().to_string() + "):\n"
     for i, region in self.regions {
       s += "  [" + i.to_string() + "] "
+      s += "type=" + region.region_type + " "
       s += "pos=(" + region.x.to_string() + "," + region.y.to_string() + ") "
       s += "size=" +
         region.width.to_string() +
@@ -778,6 +814,11 @@ pub fn DiffReport::to_text(self : DiffReport) -> String {
       s += "pixels=" + region.diff_pixels.to_string() + "\n"
     }
   }
+  // Classification
+  s += "\nClassification:\n"
+  let shift_only_str = if self.shift_only { "true" } else { "false" }
+  s += "  Shift only: " + shift_only_str + "\n"
+  s += "  Content changes: " + self.content_change_count.to_string() + "\n"
   s
 }
 
@@ -802,14 +843,16 @@ pub fn DiffReport::to_compact(self : DiffReport) -> String {
     }
     s += "\n"
   }
-  // Compact regions: x,y,w,h format
+  // Compact regions: type:x,y,w,h format
   if self.regions.length() > 0 {
     s += "regions:"
     for i, r in self.regions {
       if i > 0 {
         s += ";"
       }
-      s += r.x.to_string() +
+      s += r.region_type +
+        ":" +
+        r.x.to_string() +
         "," +
         r.y.to_string() +
         "," +
@@ -1023,13 +1066,19 @@ pub fn DiffReport::to_json(self : DiffReport) -> String {
     s += ", \"y\": " + region.y.to_string()
     s += ", \"width\": " + region.width.to_string()
     s += ", \"height\": " + region.height.to_string()
-    s += ", \"diff_pixels\": " + region.diff_pixels.to_string() + "}"
+    s += ", \"diff_pixels\": " + region.diff_pixels.to_string()
+    s += ", \"region_type\": \"" + region.region_type + "\"}"
     if i < self.regions.length() - 1 {
       s += ","
     }
     s += "\n"
   }
-  s += "  ]\n"
+  s += "  ],\n"
+  let shift_only_str = if self.shift_only { "true" } else { "false" }
+  s += "  \"shift_only\": " + shift_only_str + ",\n"
+  s += "  \"content_change_count\": " +
+    self.content_change_count.to_string() +
+    "\n"
   s += "}"
   s
 }
