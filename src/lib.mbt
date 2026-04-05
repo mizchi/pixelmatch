@@ -263,19 +263,44 @@ fn color_delta_at(
 }
 
 ///|
+/// Compute luminance delta between two positions in the same image (Y only)
+fn luminance_delta_between(
+  data : FixedArray[Int],
+  width : Int,
+  x1 : Int,
+  y1 : Int,
+  x2 : Int,
+  y2 : Int,
+) -> Double {
+  let idx1 = (y1 * width + x1) * 4
+  let idx2 = (y2 * width + x2) * 4
+  color_delta(
+    data[idx1],
+    data[idx1 + 1],
+    data[idx1 + 2],
+    data[idx1 + 3],
+    data[idx2],
+    data[idx2 + 1],
+    data[idx2 + 2],
+    data[idx2 + 3],
+    true,
+  )
+}
+
+///|
 /// Check if a pixel is anti-aliased
-/// Note: Uses color_delta_at for luminance comparison between neighbors
 fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
   let width = img1.width
   let height = img1.height
-  // Find min/max luminance delta among neighbors
+  let data1 = img1.data
+  // Find min/max luminance delta between center pixel and neighbors
   let mut min_delta = 0.0
   let mut max_delta = 0.0
   let mut min_x = x
   let mut min_y = y
   let mut max_x = x
   let mut max_y = y
-  // Check 8 neighbors
+  // Check 8 neighbors — compare center (x,y) vs neighbor (nx,ny) in img1
   for dy in -1..<=1 {
     for dx in -1..<=1 {
       if dx == 0 && dy == 0 {
@@ -286,10 +311,9 @@ fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
       if nx < 0 || nx >= width || ny < 0 || ny >= height {
         continue
       }
-      let delta = color_delta_at(img1, img1, x, y, true) -
-        color_delta_at(img1, img1, nx, ny, true)
+      let delta = luminance_delta_between(data1, width, x, y, nx, ny)
       if delta == 0.0 {
-        continue // Identical neighbor
+        continue
       }
       if delta < min_delta {
         min_delta = delta
@@ -320,7 +344,7 @@ fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
 
 ///|
 /// Check if pixel has 3+ siblings with similar color
-/// Optimized: early exit, cache data reference
+/// Fully unrolled to avoid array allocation
 fn has_many_siblings(img : Image, x : Int, y : Int) -> Bool {
   let width = img.width
   let height = img.height
@@ -331,34 +355,71 @@ fn has_many_siblings(img : Image, x : Int, y : Int) -> Bool {
   let g = data[idx + 1]
   let b = data[idx + 2]
   let a = data[idx + 3]
-  // Unrolled neighbor check for better performance
-  // Check 8 neighbors: (-1,-1), (0,-1), (1,-1), (-1,0), (1,0), (-1,1), (0,1), (1,1)
-  let neighbors = [
-    (-1, -1),
-    (0, -1),
-    (1, -1),
-    (-1, 0),
-    (1, 0),
-    (-1, 1),
-    (0, 1),
-    (1, 1),
-  ]
-  for pair in neighbors {
-    let (dx, dy) = pair
-    let nx = x + dx
-    let ny = y + dy
-    if nx >= 0 && nx < width && ny >= 0 && ny < height {
-      let nidx = (ny * width + nx) * 4
-      // Check if colors are nearly identical
-      if (data[nidx] - r).abs() < 3 &&
-        (data[nidx + 1] - g).abs() < 3 &&
-        (data[nidx + 2] - b).abs() < 3 &&
-        (data[nidx + 3] - a).abs() < 3 {
-        count += 1
-        if count >= 3 {
-          return true
-        }
-      }
+  let x0 = x > 0
+  let x1 = x < width - 1
+  let y0 = y > 0
+  let y1 = y < height - 1
+  // (-1,-1)
+  if x0 && y0 {
+    let n = ((y - 1) * width + x - 1) * 4
+    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
+      count += 1
+    }
+  }
+  // (0,-1)
+  if y0 {
+    let n = ((y - 1) * width + x) * 4
+    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
+      count += 1
+      if count >= 3 { return true }
+    }
+  }
+  // (1,-1)
+  if x1 && y0 {
+    let n = ((y - 1) * width + x + 1) * 4
+    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
+      count += 1
+      if count >= 3 { return true }
+    }
+  }
+  // (-1,0)
+  if x0 {
+    let n = (y * width + x - 1) * 4
+    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
+      count += 1
+      if count >= 3 { return true }
+    }
+  }
+  // (1,0)
+  if x1 {
+    let n = (y * width + x + 1) * 4
+    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
+      count += 1
+      if count >= 3 { return true }
+    }
+  }
+  // (-1,1)
+  if x0 && y1 {
+    let n = ((y + 1) * width + x - 1) * 4
+    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
+      count += 1
+      if count >= 3 { return true }
+    }
+  }
+  // (0,1)
+  if y1 {
+    let n = ((y + 1) * width + x) * 4
+    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
+      count += 1
+      if count >= 3 { return true }
+    }
+  }
+  // (1,1)
+  if x1 && y1 {
+    let n = ((y + 1) * width + x + 1) * 4
+    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
+      count += 1
+      if count >= 3 { return true }
     }
   }
   false

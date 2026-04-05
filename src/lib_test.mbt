@@ -95,7 +95,8 @@ test "match_ratio half different" {
       }
     }
   }
-  let ratio = match_ratio(img1, img2, Options::default())
+  // Use include_aa to skip AA detection for exact pixel count
+  let ratio = match_ratio(img1, img2, { ..Options::default(), include_aa: true })
   assert_eq(ratio, 0.5)
 }
 
@@ -113,7 +114,9 @@ test "pixelmatch with output" {
   }
   // Make one pixel different
   img2.set_pixel(2, 2, Color::rgba(255, 0, 0, 255))
-  let diff = pixelmatch(img1, img2, Some(output), Options::default())
+  // include_aa: true to count all diff pixels (not filter AA)
+  let options = { ..Options::default(), include_aa: true }
+  let diff = pixelmatch(img1, img2, Some(output), options)
   assert_eq(diff, 1)
   // Check that diff pixel is marked with diff_color (red)
   let diff_pixel = output.get_pixel(2, 2)
@@ -235,7 +238,8 @@ test "diff_report with differences" {
       img2.set_pixel(x, y, Color::rgba(255, 255, 255, 255))
     }
   }
-  let report = diff_report(img1, img2, Options::default())
+  // include_aa: true to count all diff pixels exactly
+  let report = diff_report(img1, img2, { ..Options::default(), include_aa: true })
   assert_eq(report.diff_count, 25) // 5x5 = 25 pixels
   assert_true(report.regions.length() >= 1)
   // Check that region covers the diff area
@@ -258,7 +262,12 @@ test "diff_report to_text" {
   }
   // Make corner different
   img2.set_pixel(0, 0, Color::rgba(255, 255, 255, 255))
-  let report = diff_report(img1, img2, Options::default(), grid_size=5)
+  let report = diff_report(
+    img1,
+    img2,
+    { ..Options::default(), include_aa: true },
+    grid_size=5,
+  )
   let text = report.to_text()
   // Check that text contains expected elements
   assert_true(text.contains("Diff Report"))
@@ -335,7 +344,8 @@ test "diff_report classifies edge region" {
   for x in 20..<30 {
     img2.set_pixel(x, 50, Color::rgba(255, 255, 255, 255))
   }
-  let report = diff_report(img1, img2, Options::default())
+  // include_aa: true to ensure thin line isn't filtered as AA
+  let report = diff_report(img1, img2, { ..Options::default(), include_aa: true })
   assert_true(report.regions.length() >= 1)
   assert_eq(report.regions[0].region_type, "edge")
 }

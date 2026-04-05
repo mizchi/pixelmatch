@@ -76,12 +76,12 @@ test "e2e: pixelmatch with PNG encode/decode" {
   let pm_img2 = image_data_to_image(decoded2)
   let pm_output = @pixelmatch.Image::new(w, h)
 
-  // Run pixelmatch
+  // Run pixelmatch (include_aa: true for exact pixel count)
   let diff_count = @pixelmatch.pixelmatch(
     pm_img1,
     pm_img2,
     Some(pm_output),
-    @pixelmatch.Options::default(),
+    { ..@pixelmatch.Options::default(), include_aa: true },
   )
 
   assert_eq(diff_count, 400) // 20*20
