@@ -2,19 +2,28 @@
 fn bytes_to_image(data : Array[Byte], width : UInt, height : UInt) -> @pm.Image {
   let w = width.reinterpret_as_int()
   let h = height.reinterpret_as_int()
-  let len = data.length()
-  let int_data : Array[Int] = Array::new(capacity=len)
-  for b in data {
-    int_data.push(b.to_int())
+  let pixels : Array[@pm.Color] = []
+  let mut i = 0
+  while i + 3 < data.length() {
+    pixels.push(
+      @pm.Color::rgba(
+        data[i].to_int(),
+        data[i + 1].to_int(),
+        data[i + 2].to_int(),
+        data[i + 3].to_int(),
+      ),
+    )
+    i += 4
   }
-  { width: w, height: h, data: int_data }
+  @pm.Image::from_pixels(w, h, pixels)
 }
 
 ///|
 fn image_to_bytes(img : @pm.Image) -> Array[Byte] {
-  let data : Array[Byte] = Array::new(capacity=img.data.length())
-  for v in img.data {
-    data.push(v.to_byte())
+  let len = img.data.length()
+  let data : Array[Byte] = Array::new(capacity=len)
+  for i in 0..<len {
+    data.push(img.data[i].to_byte())
   }
   data
 }
@@ -34,6 +43,7 @@ fn make_pm_opts(
     diff_color: @pm.Color::rgba(255, 0, 0, 255),
     diff_color_alt: None,
     diff_mask: diff_mask != 0,
+    detect_shift: false,
   }
 }
 
