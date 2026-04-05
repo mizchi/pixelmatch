@@ -31,19 +31,20 @@ fn image_to_bytes(img : @pm.Image) -> Array[Byte] {
 ///|
 fn make_pm_opts(
   threshold : Double,
-  include_aa : Int,
+  include_aa : Bool,
   alpha : Double,
-  diff_mask : Int,
+  diff_mask : Bool,
+  detect_shift~ : Bool = false,
 ) -> @pm.Options {
   {
     threshold,
-    include_aa: include_aa != 0,
+    include_aa,
     alpha,
     aa_color: @pm.Color::rgba(255, 255, 0, 255),
     diff_color: @pm.Color::rgba(255, 0, 0, 255),
     diff_color_alt: None,
-    diff_mask: diff_mask != 0,
-    detect_shift: false,
+    diff_mask,
+    detect_shift,
   }
 }
 
@@ -53,16 +54,16 @@ fn pixelmatch(
   img2_data : Array[Byte],
   width : UInt,
   height : UInt,
-  include_output : Int,
+  include_output : Bool,
   threshold : Double,
-  include_aa : Int,
+  include_aa : Bool,
   alpha : Double,
-  diff_mask : Int,
+  diff_mask : Bool,
 ) -> MatchResult {
   let img1 = bytes_to_image(img1_data, width, height)
   let img2 = bytes_to_image(img2_data, width, height)
   let opts = make_pm_opts(threshold, include_aa, alpha, diff_mask)
-  if include_output != 0 {
+  if include_output {
     let w = width.reinterpret_as_int()
     let h = height.reinterpret_as_int()
     let out = @pm.Image::new(w, h)
@@ -91,15 +92,36 @@ fn pixelmatch_simple(
 }
 
 ///|
+fn diff_report(
+  img1_data : Array[Byte],
+  img2_data : Array[Byte],
+  width : UInt,
+  height : UInt,
+  threshold : Double,
+  include_aa : Bool,
+  alpha : Double,
+  diff_mask : Bool,
+  grid_size : UInt,
+  detect_shift : Bool,
+) -> String {
+  let img1 = bytes_to_image(img1_data, width, height)
+  let img2 = bytes_to_image(img2_data, width, height)
+  let opts = make_pm_opts(threshold, include_aa, alpha, diff_mask, detect_shift~)
+  let gs = grid_size.reinterpret_as_int()
+  let report = @pm.diff_report(img1, img2, opts, grid_size=gs)
+  report.to_json()
+}
+
+///|
 fn match_ratio(
   img1_data : Array[Byte],
   img2_data : Array[Byte],
   width : UInt,
   height : UInt,
   threshold : Double,
-  include_aa : Int,
+  include_aa : Bool,
   alpha : Double,
-  diff_mask : Int,
+  diff_mask : Bool,
 ) -> Double {
   let img1 = bytes_to_image(img1_data, width, height)
   let img2 = bytes_to_image(img2_data, width, height)

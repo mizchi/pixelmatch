@@ -15,6 +15,10 @@ interface pixelmatch {
 
     /// Calculate similarity ratio (0.0 = completely different, 1.0 = identical).
     match-ratio: func(img1-data: list<u8>, img2-data: list<u8>, width: u32, height: u32, threshold: f64, include-aa: bool, alpha: f64, diff-mask: bool) -> f64;
+
+    /// Generate comprehensive diff report as JSON string.
+    /// Includes clustering, shift detection, region classification, and AI-friendly hints.
+    diff-report: func(img1-data: list<u8>, img2-data: list<u8>, width: u32, height: u32, threshold: f64, include-aa: bool, alpha: f64, diff-mask: bool, grid-size: u32, detect-shift: bool) -> string;
 }
 
 world pixelmatch-world {
