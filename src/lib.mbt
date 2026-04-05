@@ -89,6 +89,7 @@ pub(all) struct Options {
   diff_color_alt : Color?
   /// Mask mode - draw only changed pixels
   diff_mask : Bool
+  detect_shift : Bool
 }
 
 ///|
@@ -101,6 +102,7 @@ pub fn Options::default() -> Options {
     diff_color: Color::rgba(255, 0, 0, 255), // Red
     diff_color_alt: None,
     diff_mask: false,
+    detect_shift: false,
   }
 }
 
@@ -545,6 +547,210 @@ pub(all) struct DiffReport {
   // Classification summary
   shift_only : Bool
   content_change_count : Int
+  // Shift compensation
+  global_shift : Int
+  shift_regions : Array[ShiftRegion]
+  compensated_diff_count : Int
+}
+
+///|
+pub(all) struct ShiftRegion {
+  y_start : Int
+  y_end : Int
+  shift : Int
+}
+
+///|
+/// Compute average luminance (Y channel) per row
+pub fn luminance_profile(img : Image) -> Array[Double] {
+  let profile : Array[Double] = Array::make(img.height, 0.0)
+  let data = img.data
+  let width = img.width
+  for y in 0..<img.height {
+    let mut sum = 0.0
+    let row_base = y * width * 4
+    for x in 0..<width {
+      let base = row_base + x * 4
+      let r = data[base].to_double()
+      let g = data[base + 1].to_double()
+      let b = data[base + 2].to_double()
+      sum += 0.299 * r + 0.587 * g + 0.114 * b
+    }
+    profile[y] = sum / width.to_double()
+  }
+  profile
+}
+
+///|
+/// Detect global vertical shift via normalized cross-correlation
+/// Returns offset (positive = img2 shifted down relative to img1)
+pub fn detect_global_shift(
+  profile1 : Array[Double],
+  profile2 : Array[Double],
+  max_shift : Int,
+) -> Int {
+  let n = profile1.length()
+  if n != profile2.length() || n == 0 {
+    return 0
+  }
+  let limit = if max_shift < n / 4 { max_shift } else { n / 4 }
+  let mut best_corr = -1.0
+  let mut best_offset = 0
+  let mut offset = -limit
+  while offset <= limit {
+    let mut sum_xy = 0.0
+    let mut sum_xx = 0.0
+    let mut sum_yy = 0.0
+    let start = if offset > 0 { offset } else { 0 }
+    let end = if offset > 0 { n } else { n + offset }
+    for i in start..<end {
+      let j = i - offset
+      let x = profile1[j]
+      let y = profile2[i]
+      sum_xy += x * y
+      sum_xx += x * x
+      sum_yy += y * y
+    }
+    let denom = (sum_xx * sum_yy).sqrt()
+    let corr = if denom > 0.0 { sum_xy / denom } else { 0.0 }
+    if corr > best_corr {
+      best_corr = corr
+      best_offset = offset
+    }
+    offset += 1
+  }
+  best_offset
+}
+
+///|
+/// Detect piecewise vertical shifts using sliding window cross-correlation
+pub fn detect_piecewise_shift(
+  profile1 : Array[Double],
+  profile2 : Array[Double],
+  max_shift : Int,
+  window_size~ : Int = 100,
+) -> Array[ShiftRegion] {
+  let n = profile1.length()
+  if n == 0 {
+    return []
+  }
+  let step = window_size / 2
+  let step = if step < 1 { 1 } else { step }
+  let window_shifts : Array[(Int, Int, Int)] = []
+  let mut y = 0
+  while y < n {
+    let end = if y + window_size > n { n } else { y + window_size }
+    let len = end - y
+    if len < 4 {
+      break
+    }
+    let w1 : Array[Double] = Array::make(len, 0.0)
+    let w2 : Array[Double] = Array::make(len, 0.0)
+    for i in 0..<len {
+      w1[i] = profile1[y + i]
+      w2[i] = profile2[y + i]
+    }
+    let shift = detect_global_shift(w1, w2, max_shift)
+    window_shifts.push((y, end, shift))
+    y += step
+  }
+  if window_shifts.length() == 0 {
+    return [{ y_start: 0, y_end: n, shift: 0 }]
+  }
+  let regions : Array[ShiftRegion] = []
+  let (first_start, first_end, first_shift) = window_shifts[0]
+  let mut current_start = first_start
+  let mut current_end = first_end
+  let mut current_shift = first_shift
+  for i in 1..<window_shifts.length() {
+    let (_, w_end, w_shift) = window_shifts[i]
+    if w_shift == current_shift {
+      current_end = w_end
+    } else {
+      regions.push({ y_start: current_start, y_end: current_end, shift: current_shift })
+      current_start = current_end
+      current_end = w_end
+      current_shift = w_shift
+    }
+  }
+  regions.push({ y_start: current_start, y_end: current_end, shift: current_shift })
+  regions
+}
+
+///|
+fn color_delta_inline2(
+  data1 : FixedArray[Int],
+  base1 : Int,
+  data2 : FixedArray[Int],
+  base2 : Int,
+) -> Double {
+  let r1 = data1[base1]
+  let g1 = data1[base1 + 1]
+  let b1 = data1[base1 + 2]
+  let a1 = data1[base1 + 3]
+  let r2 = data2[base2]
+  let g2 = data2[base2 + 1]
+  let b2 = data2[base2 + 2]
+  let a2 = data2[base2 + 3]
+  let (rf1, gf1, bf1, rf2, gf2, bf2) : (Double, Double, Double, Double, Double, Double) = if a1 == a2 &&
+    a1 == 255 {
+    (
+      r1.to_double(), g1.to_double(), b1.to_double(),
+      r2.to_double(), g2.to_double(), b2.to_double(),
+    )
+  } else {
+    let alpha1 = a1.to_double() / 255.0
+    let white1 = 255.0 * (1.0 - alpha1)
+    let alpha2 = a2.to_double() / 255.0
+    let white2 = 255.0 * (1.0 - alpha2)
+    (
+      r1.to_double() * alpha1 + white1, g1.to_double() * alpha1 + white1,
+      b1.to_double() * alpha1 + white1, r2.to_double() * alpha2 + white2,
+      g2.to_double() * alpha2 + white2, b2.to_double() * alpha2 + white2,
+    )
+  }
+  let dr = rf1 - rf2
+  let dg = gf1 - gf2
+  let db = bf1 - bf2
+  let y = 0.29889531 * dr + 0.58662247 * dg + 0.11448223 * db
+  let i = 0.59597799 * dr - 0.27417610 * dg - 0.32180189 * db
+  let q = 0.21147017 * dr - 0.52261711 * dg + 0.31114694 * db
+  0.5053 * y * y + 0.299 * i * i + 0.1957 * q * q
+}
+
+///|
+fn compensated_diff(
+  img1 : Image,
+  img2 : Image,
+  shift_regions : Array[ShiftRegion],
+  threshold : Double,
+) -> Int {
+  let width = img1.width
+  let height = img1.height
+  let max_delta = 35215.0 * threshold * threshold * threshold * threshold
+  let data1 = img1.data
+  let data2 = img2.data
+  let mut count = 0
+  for region in shift_regions {
+    for y in region.y_start..<region.y_end {
+      let src_y = y - region.shift
+      if src_y < 0 || src_y >= height {
+        count += width
+        continue
+      }
+      let row1 = src_y * width * 4
+      let row2 = y * width * 4
+      for x in 0..<width {
+        let base1 = row1 + x * 4
+        let base2 = row2 + x * 4
+        let delta = color_delta_inline2(data1, base1, data2, base2)
+        if delta > max_delta {
+          count += 1
+        }
+      }
+    }
+  }
+  count
 }
 
 ///|
@@ -623,6 +829,18 @@ pub fn diff_report(
     }
   }
   let shift_only = regions.length() > 0 && !has_non_shift
+  let (global_shift, shift_regions, compensated_diff_count) = if options.detect_shift &&
+    height > 4 {
+    let p1 = luminance_profile(img1)
+    let p2 = luminance_profile(img2)
+    let max_shift_val = if height / 4 < 500 { height / 4 } else { 500 }
+    let gs = detect_global_shift(p1, p2, max_shift_val)
+    let sr = detect_piecewise_shift(p1, p2, max_shift_val, window_size=100)
+    let cd = compensated_diff(img1, img2, sr, options.threshold)
+    (gs, sr, cd)
+  } else {
+    (0, ([] : Array[ShiftRegion]), 0)
+  }
   {
     width,
     height,
@@ -636,6 +854,9 @@ pub fn diff_report(
     regions,
     shift_only,
     content_change_count,
+    global_shift,
+    shift_regions,
+    compensated_diff_count,
   }
 }
 
@@ -819,6 +1040,17 @@ pub fn DiffReport::to_text(self : DiffReport) -> String {
   let shift_only_str = if self.shift_only { "true" } else { "false" }
   s += "  Shift only: " + shift_only_str + "\n"
   s += "  Content changes: " + self.content_change_count.to_string() + "\n"
+  if self.global_shift != 0 || self.shift_regions.length() > 0 {
+    s += "\nShift Analysis:\n"
+    s += "  Global shift: " + self.global_shift.to_string() + "px\n"
+    s += "  Compensated diff: " + self.compensated_diff_count.to_string() + " pixels\n"
+    if self.shift_regions.length() > 0 {
+      s += "  Shift regions:\n"
+      for sr in self.shift_regions {
+        s += "    y=[" + sr.y_start.to_string() + ".." + sr.y_end.to_string() + "] shift=" + sr.shift.to_string() + "px\n"
+      }
+    }
+  }
   s
 }
 
@@ -1078,7 +1310,20 @@ pub fn DiffReport::to_json(self : DiffReport) -> String {
   s += "  \"shift_only\": " + shift_only_str + ",\n"
   s += "  \"content_change_count\": " +
     self.content_change_count.to_string() +
-    "\n"
+    ",\n"
+  s += "  \"global_shift\": " + self.global_shift.to_string() + ",\n"
+  s += "  \"compensated_diff_count\": " + self.compensated_diff_count.to_string() + ",\n"
+  s += "  \"shift_regions\": [\n"
+  for i, sr in self.shift_regions {
+    s += "    {\"y_start\": " + sr.y_start.to_string()
+    s += ", \"y_end\": " + sr.y_end.to_string()
+    s += ", \"shift\": " + sr.shift.to_string() + "}"
+    if i < self.shift_regions.length() - 1 {
+      s += ","
+    }
+    s += "\n"
+  }
+  s += "  ]\n"
   s += "}"
   s
 }

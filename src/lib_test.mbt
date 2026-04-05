@@ -401,3 +401,156 @@ test "diff_report to_json includes region_type" {
   assert_true(json.contains("\"shift_only\": false"))
   assert_true(json.contains("\"content_change_count\": 1"))
 }
+
+///|
+test "luminance_profile computes row averages" {
+  let img = Image::new(4, 3)
+  for x in 0..<4 {
+    img.set_pixel(x, 0, Color::rgba(0, 0, 0, 255))
+    img.set_pixel(x, 1, Color::rgba(255, 255, 255, 255))
+    img.set_pixel(x, 2, Color::rgba(128, 128, 128, 255))
+  }
+  let profile = luminance_profile(img)
+  assert_eq(profile.length(), 3)
+  assert_true(profile[0] < 1.0)
+  assert_true(profile[1] > 254.0)
+  assert_true(profile[2] > 100.0 && profile[2] < 160.0)
+}
+
+///|
+test "detect_global_shift finds known offset" {
+  let img1 = Image::new(20, 40)
+  let img2 = Image::new(20, 40)
+  for y in 0..<40 {
+    let v = (y * 6) % 256
+    for x in 0..<20 {
+      img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
+    }
+  }
+  for y in 0..<40 {
+    let src_y = y - 5
+    let v = if src_y >= 0 && src_y < 40 { (src_y * 6) % 256 } else { 0 }
+    for x in 0..<20 {
+      img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
+    }
+  }
+  let p1 = luminance_profile(img1)
+  let p2 = luminance_profile(img2)
+  let shift = detect_global_shift(p1, p2, 10)
+  assert_eq(shift, 5)
+}
+
+///|
+test "detect_global_shift returns 0 for identical images" {
+  let img1 = Image::new(10, 20)
+  let img2 = Image::new(10, 20)
+  for y in 0..<20 {
+    let v = y * 12
+    for x in 0..<10 {
+      img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
+      img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
+    }
+  }
+  let p1 = luminance_profile(img1)
+  let p2 = luminance_profile(img2)
+  let shift = detect_global_shift(p1, p2, 10)
+  assert_eq(shift, 0)
+}
+
+///|
+test "detect_piecewise_shift finds multiple offsets" {
+  let img1 = Image::new(20, 100)
+  let img2 = Image::new(20, 100)
+  for y in 0..<100 {
+    let v = (y * 5) % 256
+    for x in 0..<20 {
+      img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
+    }
+  }
+  for y in 0..<50 {
+    let v = (y * 5) % 256
+    for x in 0..<20 {
+      img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
+    }
+  }
+  for y in 50..<100 {
+    let src_y = y - 3
+    let v = if src_y >= 0 && src_y < 100 { (src_y * 5) % 256 } else { 0 }
+    for x in 0..<20 {
+      img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
+    }
+  }
+  let p1 = luminance_profile(img1)
+  let p2 = luminance_profile(img2)
+  let regions = detect_piecewise_shift(p1, p2, 10, window_size=25)
+  assert_true(regions.length() >= 2)
+  assert_true(regions[0].shift.abs() <= 1)
+  let has_shifted = regions.iter().any(fn(r) { r.shift == 3 })
+  assert_true(has_shifted)
+}
+
+///|
+test "diff_report with shift compensation" {
+  let img1 = Image::new(20, 40)
+  let img2 = Image::new(20, 40)
+  for y in 0..<40 {
+    let v = (y * 6) % 256
+    for x in 0..<20 {
+      img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
+    }
+  }
+  for y in 0..<40 {
+    let src_y = y - 5
+    let v = if src_y >= 0 && src_y < 40 { (src_y * 6) % 256 } else { 0 }
+    for x in 0..<20 {
+      img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
+    }
+  }
+  let options = { ..Options::default(), detect_shift: true }
+  let report = diff_report(img1, img2, options)
+  assert_eq(report.global_shift, 5)
+  assert_true(report.diff_count > 0)
+  assert_true(report.compensated_diff_count < report.diff_count)
+  assert_true(report.shift_regions.length() > 0)
+}
+
+///|
+test "diff_report without shift compensation has defaults" {
+  let img1 = Image::new(10, 10)
+  let img2 = Image::new(10, 10)
+  for y in 0..<10 {
+    for x in 0..<10 {
+      img1.set_pixel(x, y, Color::rgba(50, 50, 50, 255))
+      img2.set_pixel(x, y, Color::rgba(50, 50, 50, 255))
+    }
+  }
+  let report = diff_report(img1, img2, Options::default())
+  assert_eq(report.global_shift, 0)
+  assert_eq(report.compensated_diff_count, 0)
+  assert_eq(report.shift_regions.length(), 0)
+}
+
+///|
+test "diff_report to_json includes shift fields when enabled" {
+  let img1 = Image::new(20, 40)
+  let img2 = Image::new(20, 40)
+  for y in 0..<40 {
+    let v = (y * 6) % 256
+    for x in 0..<20 {
+      img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
+    }
+  }
+  for y in 0..<40 {
+    let src_y = y - 5
+    let v = if src_y >= 0 && src_y < 40 { (src_y * 6) % 256 } else { 0 }
+    for x in 0..<20 {
+      img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
+    }
+  }
+  let options = { ..Options::default(), detect_shift: true }
+  let report = diff_report(img1, img2, options)
+  let json = report.to_json()
+  assert_true(json.contains("\"global_shift\":"))
+  assert_true(json.contains("\"shift_regions\":"))
+  assert_true(json.contains("\"compensated_diff_count\":"))
+}
