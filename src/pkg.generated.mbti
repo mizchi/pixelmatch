@@ -1,8 +1,20 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "mizchi/pixelmatch"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
+pub fn compensated_diff(Image, Image, Array[ShiftRegion], Double) -> Int
+
+pub fn detect_global_shift(FixedArray[Double], FixedArray[Double], Int) -> Int
+
+pub fn detect_piecewise_shift(FixedArray[Double], FixedArray[Double], Int, window_size? : Int) -> Array[ShiftRegion]
+
 pub fn diff_report(Image, Image, Options, grid_size? : Int) -> DiffReport
+
+pub fn luminance_profile(Image) -> FixedArray[Double]
 
 pub fn match_ratio(Image, Image, Options) -> Double
 
@@ -22,9 +34,10 @@ pub(all) struct Color {
   g : Int
   b : Int
   a : Int
-} derive(Eq, Show)
+} derive(Eq, @debug.Debug)
 pub fn Color::rgb(Int, Int, Int) -> Self
 pub fn Color::rgba(Int, Int, Int, Int) -> Self
+pub impl Show for Color
 
 pub(all) struct DiffRegion {
   x : Int
@@ -32,6 +45,7 @@ pub(all) struct DiffRegion {
   width : Int
   height : Int
   diff_pixels : Int
+  region_type : String
 }
 
 pub(all) struct DiffReport {
@@ -45,6 +59,11 @@ pub(all) struct DiffReport {
   grid_cols : Int
   grid_rows : Int
   regions : Array[DiffRegion]
+  shift_only : Bool
+  content_change_count : Int
+  global_shift : Int
+  shift_regions : Array[ShiftRegion]
+  compensated_diff_count : Int
 }
 pub fn DiffReport::to_compact(Self) -> String
 pub fn DiffReport::to_compact_with_hints(Self) -> String
@@ -69,8 +88,15 @@ pub(all) struct Options {
   diff_color : Color
   diff_color_alt : Color?
   diff_mask : Bool
+  detect_shift : Bool
 }
 pub fn Options::default() -> Self
+
+pub(all) struct ShiftRegion {
+  y_start : Int
+  y_end : Int
+  shift : Int
+}
 
 // Type aliases
 

@@ -9,7 +9,20 @@ pub(all) struct Color {
   g : Int
   b : Int
   a : Int
-} derive(Show, Eq)
+} derive(Debug, Eq)
+
+///|
+pub impl Show for Color with output(self, logger) {
+  logger.write_string("Color(r=")
+  logger.write_string(self.r.to_string())
+  logger.write_string(", g=")
+  logger.write_string(self.g.to_string())
+  logger.write_string(", b=")
+  logger.write_string(self.b.to_string())
+  logger.write_string(", a=")
+  logger.write_string(self.a.to_string())
+  logger.write_string(")")
+}
 
 ///|
 pub fn Color::rgba(r : Int, g : Int, b : Int, a : Int) -> Color {

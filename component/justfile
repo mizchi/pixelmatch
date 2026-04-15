@@ -1,18 +1,24 @@
-moon_component := env("MOON_COMPONENT", "moon-component")
 wasm := "_build/wasm/release/build/impl/impl.wasm"
+wasm_fixed := "_build/wasm/release/build/impl/impl.fixed.wasm"
 out := "pixelmatch-component.wasm"
 
 default:
     @just --list
 
 generate:
-    cd {{justfile_directory()}} && {{moon_component}} generate wit --out-dir . --no-impl
+    cd {{justfile_directory()}} && moon-component generate wit --out-dir . --no-impl
 
 build-wasm:
     cd {{justfile_directory()}} && moon build --target wasm --release
 
-build: build-wasm
-    cd {{justfile_directory()}} && {{moon_component}} componentize {{wasm}} --wit-dir wit -o {{out}}
+# Fix MoonBit WASM codegen bug (FixedArray.op_set stack issue)
+fix-wasm: build-wasm
+    cd {{justfile_directory()}} && python3 scripts/fix-wasm-codegen.py {{wasm}} {{wasm_fixed}}
+
+# Build WASM component (embed WIT + create component)
+build: fix-wasm
+    cd {{justfile_directory()}} && wasm-tools component embed wit {{wasm_fixed}} -o _build/impl.embedded.wasm
+    cd {{justfile_directory()}} && wasm-tools component new _build/impl.embedded.wasm -o {{out}}
 
 transpile: build
     npx jco transpile {{out}} -o test/gen
