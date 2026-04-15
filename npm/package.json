@@ -1,0 +1,37 @@
+{
+  "name": "@mizchi/pixelmatch",
+  "version": "0.5.1",
+  "description": "Fast pixel-level image comparison library (MoonBit compiled to JS)",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build:moon": "moon build --target js --release",
+    "build": "npm run build:moon && node scripts/bundle.js",
+    "test": "node test/test.js"
+  },
+  "keywords": [
+    "image",
+    "comparison",
+    "diff",
+    "pixelmatch",
+    "visual-regression",
+    "testing",
+    "moonbit"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mizchi/pixelmatch"
+  },
+  "license": "Apache-2.0",
+  "author": "mizchi"
+}

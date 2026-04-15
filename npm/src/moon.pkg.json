@@ -1,0 +1,17 @@
+{
+  "is-main": true,
+  "import": [
+    { "path": "mizchi/pixelmatch", "alias": "pm" }
+  ],
+  "link": {
+    "js": {
+      "exports": [
+        "pixelmatch_js",
+        "pixelmatch_simple_js",
+        "match_ratio_js",
+        "diff_report_js"
+      ],
+      "format": "esm"
+    }
+  }
+}

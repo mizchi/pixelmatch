@@ -48,3 +48,11 @@ build-rs:
 
 # Pre-release check
 release-check: fmt info check test
+
+# Build npm package (@mizchi/pixelmatch)
+build-npm:
+    cd npm && moon build --target js --release && node scripts/bundle.js
+
+# Test npm package
+test-npm:
+    cd npm && node test/test.js

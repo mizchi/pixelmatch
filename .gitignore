@@ -8,3 +8,6 @@ target
 component/_build/
 component/*.wasm
 component/test/gen/
+npm/_build/
+npm/.mooncakes/
+npm/node_modules/
