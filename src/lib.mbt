@@ -131,6 +131,13 @@ pub fn pixelmatch(
   if img1.width != img2.width || img1.height != img2.height {
     abort("Image dimensions must match")
   }
+  match output {
+    Some(out) =>
+      if out.width != img1.width || out.height != img1.height {
+        abort("Output image dimensions must match input images")
+      }
+    None => ()
+  }
   let width = img1.width
   let height = img1.height
   // Maximum delta based on threshold
@@ -907,6 +914,9 @@ pub fn compensated_diff(
   shift_regions : Array[ShiftRegion],
   threshold : Double,
 ) -> Int {
+  if img1.width != img2.width || img1.height != img2.height {
+    abort("Image dimensions must match")
+  }
   let width = img1.width
   let height = img1.height
   let max_delta = 35215.0 * threshold * threshold * threshold * threshold
@@ -1124,18 +1134,31 @@ fn find_diff_regions_flat(
           if cy > max_y {
             max_y = cy
           }
-          // Add neighbors with bounds check before push
+          // Add neighbors: check visited and diff_map before push to avoid
+          // pushing the same pixel multiple times (up to 4x per pixel)
           if cx > 0 {
-            stack.push(cidx - 1)
+            let n = cidx - 1
+            if !visited[n] && diff_map[n] {
+              stack.push(n)
+            }
           }
           if cx < width - 1 {
-            stack.push(cidx + 1)
+            let n = cidx + 1
+            if !visited[n] && diff_map[n] {
+              stack.push(n)
+            }
           }
           if cy > 0 {
-            stack.push(cidx - width)
+            let n = cidx - width
+            if !visited[n] && diff_map[n] {
+              stack.push(n)
+            }
           }
           if cy < height - 1 {
-            stack.push(cidx + width)
+            let n = cidx + width
+            if !visited[n] && diff_map[n] {
+              stack.push(n)
+            }
           }
         }
         if pixel_count > 0 {
