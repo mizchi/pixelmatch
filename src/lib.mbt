@@ -44,6 +44,14 @@ pub(all) struct Image {
 
 ///|
 pub fn Image::new(width : Int, height : Int) -> Image {
+  if width < 0 || height < 0 {
+    abort("Image dimensions must be non-negative")
+  }
+  // Guard against integer overflow: width * height * 4 must fit in Int
+  let pixels = width.to_int64() * height.to_int64()
+  if pixels * 4L > 2147483647L {
+    abort("Image too large: dimensions would overflow")
+  }
   let size = width * height * 4
   { width, height, data: FixedArray::make(size, 0) }
 }
@@ -54,7 +62,16 @@ pub fn Image::from_pixels(
   height : Int,
   pixels : Array[Color],
 ) -> Image {
-  let data = FixedArray::make(width * height * 4, 0)
+  let expected = width * height
+  if pixels.length() != expected {
+    abort(
+      "Image::from_pixels: expected " +
+      expected.to_string() +
+      " pixels, got " +
+      pixels.length().to_string(),
+    )
+  }
+  let data = FixedArray::make(expected * 4, 0)
   for i, pixel in pixels {
     let base = i * 4
     data[base] = pixel.r
