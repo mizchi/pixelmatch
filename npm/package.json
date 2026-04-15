@@ -17,7 +17,8 @@
   "scripts": {
     "build:moon": "moon build --target js --release",
     "build": "npm run build:moon && node scripts/bundle.js",
-    "test": "node test/test.js"
+    "prepublishOnly": "npm run build",
+    "test": "npm run build && node test/test.js"
   },
   "keywords": [
     "image",

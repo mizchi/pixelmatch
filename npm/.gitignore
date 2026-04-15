@@ -2,3 +2,5 @@ _build/
 .mooncakes/
 target/
 node_modules/
+dist/pixelmatch.gen.js
+dist/pixelmatch.gen.js.map
