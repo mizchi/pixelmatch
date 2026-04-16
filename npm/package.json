@@ -35,7 +35,7 @@
   },
   "license": "Apache-2.0",
   "author": "mizchi",
-  "dependencies": {
+  "devDependencies": {
     "pixelmatch": "^7.1.0"
   }
 }
