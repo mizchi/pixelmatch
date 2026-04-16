@@ -13,6 +13,18 @@ function makeSolid(w, h, r, g, b, a = 255) {
   return data;
 }
 
+// Helper: fake ImageData (Canvas-like)
+function makeImageData(w, h, r, g, b, a = 255) {
+  const data = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i++) {
+    data[i * 4] = r;
+    data[i * 4 + 1] = g;
+    data[i * 4 + 2] = b;
+    data[i * 4 + 3] = a;
+  }
+  return { width: w, height: h, data };
+}
+
 console.log("Test 1: identical images → 0 diff");
 {
   const img = makeSolid(10, 10, 128, 128, 128);
@@ -38,7 +50,6 @@ console.log("Test 3: pixelmatch with output buffer");
   const result = pixelmatch(img1, img2, 10, 10, { output });
   assert.equal(result.diffCount, 100);
   assert.ok(result.output);
-  // Output should have red pixels (diff color)
   assert.equal(result.output[0], 255); // R
   assert.equal(result.output[1], 0);   // G
   assert.equal(result.output[2], 0);   // B
@@ -72,7 +83,7 @@ console.log("Test 6: matchRatio completely different");
   console.log("  PASS: ratio =", ratio);
 }
 
-console.log("Test 7: diffReport");
+console.log("Test 7: diffReport (camelCase fields)");
 {
   const img1 = makeSolid(20, 20, 128, 128, 128);
   const img2 = makeSolid(20, 20, 128, 128, 128);
@@ -86,14 +97,27 @@ console.log("Test 7: diffReport");
     }
   }
   const report = diffReport(img1, img2, 20, 20);
+  // Verify camelCase field names
   assert.equal(report.width, 20);
   assert.equal(report.height, 20);
-  assert.equal(report.total_pixels, 400);
-  assert.ok(report.diff_count > 0);
-  assert.ok(report.match_ratio > 0 && report.match_ratio < 1);
+  assert.equal(report.totalPixels, 400);
+  assert.ok(report.diffCount > 0);
+  assert.ok(report.matchRatio > 0 && report.matchRatio < 1);
+  assert.ok(report.aaCount >= 0);
   assert.ok(Array.isArray(report.grid));
   assert.ok(Array.isArray(report.regions));
-  console.log("  PASS: diff_count =", report.diff_count, "match_ratio =", report.match_ratio);
+  assert.equal(typeof report.shiftOnly, "boolean");
+  assert.equal(typeof report.contentChangeCount, "number");
+  assert.equal(typeof report.globalShift, "number");
+  assert.equal(typeof report.compensatedDiffCount, "number");
+  assert.ok(Array.isArray(report.shiftRegions));
+  // Verify region fields are camelCase
+  if (report.regions.length > 0) {
+    const r = report.regions[0];
+    assert.equal(typeof r.diffPixels, "number");
+    assert.ok(["shift", "content", "edge"].includes(r.regionType));
+  }
+  console.log("  PASS: diffCount =", report.diffCount, "matchRatio =", report.matchRatio);
 }
 
 console.log("Test 8: diffReport with shift detection");
@@ -101,8 +125,33 @@ console.log("Test 8: diffReport with shift detection");
   const img1 = makeSolid(20, 20, 128, 128, 128);
   const img2 = makeSolid(20, 20, 128, 128, 128);
   const report = diffReport(img1, img2, 20, 20, { detectShift: true });
-  assert.equal(report.diff_count, 0);
+  assert.equal(report.diffCount, 0);
+  assert.ok(Array.isArray(report.shiftRegions));
+  if (report.shiftRegions.length > 0) {
+    const sr = report.shiftRegions[0];
+    assert.equal(typeof sr.yStart, "number");
+    assert.equal(typeof sr.yEnd, "number");
+    assert.equal(typeof sr.shift, "number");
+  }
   console.log("  PASS");
+}
+
+console.log("Test 9: ImageData input (Canvas-like)");
+{
+  const img1 = makeImageData(10, 10, 0, 0, 0);
+  const img2 = makeImageData(10, 10, 255, 255, 255);
+  const result = pixelmatch(img1, img2, 10, 10);
+  assert.equal(result.diffCount, 100);
+  console.log("  PASS: ImageData input works");
+}
+
+console.log("Test 10: ImageData with pixelmatchSimple");
+{
+  const img1 = makeImageData(10, 10, 0, 0, 0);
+  const img2 = makeImageData(10, 10, 255, 255, 255);
+  const diff = pixelmatchSimple(img1, img2, 10, 10);
+  assert.equal(diff, 100);
+  console.log("  PASS: diff =", diff);
 }
 
 console.log("\nAll tests passed!");
