@@ -1,6 +1,6 @@
 {
   "name": "@mizchi/pixelmatch",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Fast pixel-level image comparison library (MoonBit compiled to JS)",
   "type": "module",
   "main": "./dist/index.js",
