@@ -54,5 +54,5 @@ build-npm:
     cd npm && moon build --target js --release && node scripts/bundle.js
 
 # Test npm package
-test-npm:
+test-npm: build-npm
     cd npm && node test/test.js

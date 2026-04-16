@@ -5,6 +5,19 @@ fn to_image(
   width : Int,
   height : Int,
 ) -> @pm.Image {
+  let expected = width * height * 4
+  if data.length() != expected {
+    abort(
+      "pixelmatch: expected " +
+      expected.to_string() +
+      " pixel values (width=" +
+      width.to_string() +
+      " * height=" +
+      height.to_string() +
+      " * 4), got " +
+      data.length().to_string(),
+    )
+  }
   { width, height, data }
 }
 
