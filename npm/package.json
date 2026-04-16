@@ -34,5 +34,8 @@
     "url": "https://github.com/mizchi/pixelmatch"
   },
   "license": "Apache-2.0",
-  "author": "mizchi"
+  "author": "mizchi",
+  "dependencies": {
+    "pixelmatch": "^7.1.0"
+  }
 }

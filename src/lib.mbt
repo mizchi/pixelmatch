@@ -159,11 +159,7 @@ pub fn pixelmatch(
   let height = img1.height
   // Maximum delta based on threshold
   // 35215 is the maximum possible delta (see YIQ calculation)
-  let max_delta = 35215.0 *
-    options.threshold *
-    options.threshold *
-    options.threshold *
-    options.threshold
+  let max_delta = 35215.0 * options.threshold * options.threshold
   let mut diff_count = 0
   for y in 0..<height {
     for x in 0..<width {
@@ -224,42 +220,26 @@ fn color_delta(
   b2 : Int,
   a2 : Int,
   y_only : Bool,
+  pos~ : Int = 0,
 ) -> Double {
-  // Handle alpha - need to blend both when either is non-opaque or they differ
-  let (rf1, gf1, bf1, rf2, gf2, bf2) : (
-    Double,
-    Double,
-    Double,
-    Double,
-    Double,
-    Double,
-  ) = if a1 == a2 && a1 == 255 {
-    (
-      r1.to_double(),
-      g1.to_double(),
-      b1.to_double(),
-      r2.to_double(),
-      g2.to_double(),
-      b2.to_double(),
-    )
-  } else {
-    let alpha1 = a1.to_double() / 255.0
-    let white1 = 255.0 * (1.0 - alpha1)
-    let alpha2 = a2.to_double() / 255.0
-    let white2 = 255.0 * (1.0 - alpha2)
-    (
-      r1.to_double() * alpha1 + white1,
-      g1.to_double() * alpha1 + white1,
-      b1.to_double() * alpha1 + white1,
-      r2.to_double() * alpha2 + white2,
-      g2.to_double() * alpha2 + white2,
-      b2.to_double() * alpha2 + white2,
-    )
+  let mut dr = (r1 - r2).to_double()
+  let mut dg = (g1 - g2).to_double()
+  let mut db = (b1 - b2).to_double()
+  let da = (a1 - a2).to_double()
+  // Early exit for identical pixels
+  if dr == 0.0 && dg == 0.0 && db == 0.0 && da == 0.0 {
+    return 0.0
+  }
+  // Alpha blending against a checkerboard background (matching mapbox/pixelmatch)
+  if a1 < 255 || a2 < 255 {
+    let rb = 48.0 + 159.0 * (pos % 2).to_double()
+    let gb = 48.0 + 159.0 * ((pos.to_double() / 1.618033988749895).to_int() % 2).to_double()
+    let bb = 48.0 + 159.0 * ((pos.to_double() / 2.618033988749895).to_int() % 2).to_double()
+    dr = (r1.to_double() * a1.to_double() - r2.to_double() * a2.to_double() - rb * da) / 255.0
+    dg = (g1.to_double() * a1.to_double() - g2.to_double() * a2.to_double() - gb * da) / 255.0
+    db = (b1.to_double() * a1.to_double() - b2.to_double() * a2.to_double() - bb * da) / 255.0
   }
   // Calculate YIQ components
-  let dr = rf1 - rf2
-  let dg = gf1 - gf2
-  let db = bf1 - bf2
   // Y (luminance)
   let y = 0.29889531 * dr + 0.58662247 * dg + 0.11448223 * db
   if y_only {
@@ -270,7 +250,7 @@ fn color_delta(
   let q = 0.21147017 * dr - 0.52261711 * dg + 0.31114694 * db
   // Weighted delta (sign indicates lightening/darkening)
   let delta = 0.5053 * y * y + 0.299 * i * i + 0.1957 * q * q
-  if y < 0.0 {
+  if y > 0.0 {
     -delta
   } else {
     delta
@@ -296,6 +276,7 @@ fn color_delta_at(
     img2.data[idx + 2],
     img2.data[idx + 3],
     y_only,
+    pos=idx,
   )
 }
 
@@ -321,51 +302,56 @@ fn luminance_delta_between(
     data[idx2 + 2],
     data[idx2 + 3],
     true,
+    pos=idx1,
   )
 }
 
 ///|
-/// Check if a pixel is anti-aliased
+/// Check if a pixel is anti-aliased (matching mapbox/pixelmatch algorithm)
 fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
   let width = img1.width
   let height = img1.height
-  let data1 = img1.data
-  // Find min/max luminance delta between center pixel and neighbors
+  let x_lo = if x > 0 { x - 1 } else { 0 }
+  let x_hi = if x < width - 1 { x + 1 } else { width - 1 }
+  let y_lo = if y > 0 { y - 1 } else { 0 }
+  let y_hi = if y < height - 1 { y + 1 } else { height - 1 }
+  // Boundary pixels get a head start for zeroes count
+  let mut zeroes = if x == x_lo || x == x_hi || y == y_lo || y == y_hi { 1 } else { 0 }
   let mut min_delta = 0.0
   let mut max_delta = 0.0
   let mut min_x = x
   let mut min_y = y
   let mut max_x = x
   let mut max_y = y
-  // Check 8 neighbors — compare center (x,y) vs neighbor (nx,ny) in img1
-  for dy in -1..<=1 {
-    for dx in -1..<=1 {
-      if dx == 0 && dy == 0 {
-        continue
+  let data1 = img1.data
+  let mut ny = y_lo
+  while ny <= y_hi {
+    let mut nx = x_lo
+    while nx <= x_hi {
+      if nx != x || ny != y {
+        let delta = luminance_delta_between(data1, width, x, y, nx, ny)
+        if delta == 0.0 {
+          zeroes += 1
+          // If more than 2 identical neighbors, it's definitely not anti-aliasing
+          if zeroes > 2 {
+            return false
+          }
+        } else if delta < min_delta {
+          min_delta = delta
+          min_x = nx
+          min_y = ny
+        } else if delta > max_delta {
+          max_delta = delta
+          max_x = nx
+          max_y = ny
+        }
       }
-      let nx = x + dx
-      let ny = y + dy
-      if nx < 0 || nx >= width || ny < 0 || ny >= height {
-        continue
-      }
-      let delta = luminance_delta_between(data1, width, x, y, nx, ny)
-      if delta == 0.0 {
-        continue
-      }
-      if delta < min_delta {
-        min_delta = delta
-        min_x = nx
-        min_y = ny
-      }
-      if delta > max_delta {
-        max_delta = delta
-        max_x = nx
-        max_y = ny
-      }
+      nx += 1
     }
+    ny += 1
   }
   // No contrast difference
-  if min_delta == 0.0 && max_delta == 0.0 {
+  if min_delta == 0.0 || max_delta == 0.0 {
     return false
   }
   // Check if darkest/brightest neighbor has 3+ equal siblings in both images
@@ -380,84 +366,40 @@ fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
 }
 
 ///|
-/// Check if pixel has 3+ siblings with similar color
-/// Fully unrolled to avoid array allocation
+/// Check if a pixel has 3+ adjacent pixels of the same color.
+/// Uses exact RGBA match (matching mapbox/pixelmatch Uint32 comparison).
+/// Boundary pixels start with count=1 (they have fewer neighbors).
 fn has_many_siblings(img : Image, x : Int, y : Int) -> Bool {
   let width = img.width
   let height = img.height
   let data = img.data
-  let mut count = 0
   let idx = (y * width + x) * 4
   let r = data[idx]
   let g = data[idx + 1]
   let b = data[idx + 2]
   let a = data[idx + 3]
-  let x0 = x > 0
-  let x1 = x < width - 1
-  let y0 = y > 0
-  let y1 = y < height - 1
-  // (-1,-1)
-  if x0 && y0 {
-    let n = ((y - 1) * width + x - 1) * 4
-    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
-      count += 1
+  let x_lo = if x > 0 { x - 1 } else { 0 }
+  let x_hi = if x < width - 1 { x + 1 } else { width - 1 }
+  let y_lo = if y > 0 { y - 1 } else { 0 }
+  let y_hi = if y < height - 1 { y + 1 } else { height - 1 }
+  // Boundary pixels get a head start (matching original: zeroes starts at 1 on boundary)
+  let mut count = if x == x_lo || x == x_hi || y == y_lo || y == y_hi { 1 } else { 0 }
+  let mut ny = y_lo
+  while ny <= y_hi {
+    let mut nx = x_lo
+    while nx <= x_hi {
+      if nx != x || ny != y {
+        let n = (ny * width + nx) * 4
+        if data[n] == r && data[n + 1] == g && data[n + 2] == b && data[n + 3] == a {
+          count += 1
+          if count > 2 {
+            return true
+          }
+        }
+      }
+      nx += 1
     }
-  }
-  // (0,-1)
-  if y0 {
-    let n = ((y - 1) * width + x) * 4
-    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
-      count += 1
-      if count >= 3 { return true }
-    }
-  }
-  // (1,-1)
-  if x1 && y0 {
-    let n = ((y - 1) * width + x + 1) * 4
-    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
-      count += 1
-      if count >= 3 { return true }
-    }
-  }
-  // (-1,0)
-  if x0 {
-    let n = (y * width + x - 1) * 4
-    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
-      count += 1
-      if count >= 3 { return true }
-    }
-  }
-  // (1,0)
-  if x1 {
-    let n = (y * width + x + 1) * 4
-    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
-      count += 1
-      if count >= 3 { return true }
-    }
-  }
-  // (-1,1)
-  if x0 && y1 {
-    let n = ((y + 1) * width + x - 1) * 4
-    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
-      count += 1
-      if count >= 3 { return true }
-    }
-  }
-  // (0,1)
-  if y1 {
-    let n = ((y + 1) * width + x) * 4
-    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
-      count += 1
-      if count >= 3 { return true }
-    }
-  }
-  // (1,1)
-  if x1 && y1 {
-    let n = ((y + 1) * width + x + 1) * 4
-    if (data[n] - r).abs() < 3 && (data[n + 1] - g).abs() < 3 && (data[n + 2] - b).abs() < 3 && (data[n + 3] - a).abs() < 3 {
-      count += 1
-      if count >= 3 { return true }
-    }
+    ny += 1
   }
   false
 }
@@ -469,10 +411,12 @@ fn blend_gray(img : Image, x : Int, y : Int, alpha : Double) -> Color {
   let r = img.data[idx].to_double()
   let g = img.data[idx + 1].to_double()
   let b = img.data[idx + 2].to_double()
-  // Luminance
-  let lum = (0.299 * r + 0.587 * g + 0.114 * b).to_int()
-  let blended = (lum.to_double() * alpha).to_int()
-  Color::rgba(blended, blended, blended, 255)
+  let a = img.data[idx + 3].to_double()
+  // Luminance (matching mapbox/pixelmatch coefficients)
+  let y_val = r * 0.29889531 + g * 0.58662247 + b * 0.11448223
+  // Blend: 255 + (Y - 255) * alpha * a / 255
+  let val = (255.0 + (y_val - 255.0) * alpha * a / 255.0).to_int()
+  Color::rgba(val, val, val, 255)
 }
 
 ///|
@@ -495,41 +439,18 @@ fn color_delta_inline(
   if r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2 {
     return 0.0
   }
-  // Fast path: both fully opaque (most common case)
-  let (rf1, gf1, bf1, rf2, gf2, bf2) : (
-    Double,
-    Double,
-    Double,
-    Double,
-    Double,
-    Double,
-  ) = if a1 == a2 && a1 == 255 {
-    (
-      r1.to_double(),
-      g1.to_double(),
-      b1.to_double(),
-      r2.to_double(),
-      g2.to_double(),
-      b2.to_double(),
-    )
-  } else {
-    // Need to blend both with white
-    let alpha1 = a1.to_double() / 255.0
-    let white1 = 255.0 * (1.0 - alpha1)
-    let alpha2 = a2.to_double() / 255.0
-    let white2 = 255.0 * (1.0 - alpha2)
-    (
-      r1.to_double() * alpha1 + white1,
-      g1.to_double() * alpha1 + white1,
-      b1.to_double() * alpha1 + white1,
-      r2.to_double() * alpha2 + white2,
-      g2.to_double() * alpha2 + white2,
-      b2.to_double() * alpha2 + white2,
-    )
+  let mut dr = (r1 - r2).to_double()
+  let mut dg = (g1 - g2).to_double()
+  let mut db = (b1 - b2).to_double()
+  let da = (a1 - a2).to_double()
+  if a1 < 255 || a2 < 255 {
+    let rb = 48.0 + 159.0 * (base % 2).to_double()
+    let gb = 48.0 + 159.0 * ((base.to_double() / 1.618033988749895).to_int() % 2).to_double()
+    let bb = 48.0 + 159.0 * ((base.to_double() / 2.618033988749895).to_int() % 2).to_double()
+    dr = (r1.to_double() * a1.to_double() - r2.to_double() * a2.to_double() - rb * da) / 255.0
+    dg = (g1.to_double() * a1.to_double() - g2.to_double() * a2.to_double() - gb * da) / 255.0
+    db = (b1.to_double() * a1.to_double() - b2.to_double() * a2.to_double() - bb * da) / 255.0
   }
-  let dr = rf1 - rf2
-  let dg = gf1 - gf2
-  let db = bf1 - bf2
   let y = 0.29889531 * dr + 0.58662247 * dg + 0.11448223 * db
   let i = 0.59597799 * dr - 0.27417610 * dg - 0.32180189 * db
   let q = 0.21147017 * dr - 0.52261711 * dg + 0.31114694 * db
@@ -544,7 +465,7 @@ pub fn pixelmatch_simple(img1 : Image, img2 : Image, threshold : Double) -> Int 
   if img1.width != img2.width || img1.height != img2.height {
     abort("Image dimensions must match")
   }
-  let max_delta = 35215.0 * threshold * threshold * threshold * threshold
+  let max_delta = 35215.0 * threshold * threshold
   let mut diff_count = 0
   let len = img1.data.length() / 4
   let data1 = img1.data
@@ -571,7 +492,7 @@ pub fn pixelmatch_simple_prefilter(
   if img1.width != img2.width || img1.height != img2.height {
     abort("Image dimensions must match")
   }
-  let max_delta = 35215.0 * threshold * threshold * threshold * threshold
+  let max_delta = 35215.0 * threshold * threshold
   let width = img1.width
   let height = img1.height
   let data1 = img1.data
@@ -894,30 +815,21 @@ fn color_delta_inline2(
   let g2 = data2[base2 + 1]
   let b2 = data2[base2 + 2]
   let a2 = data2[base2 + 3]
-  // Early exit for identical pixels
   if r1 == r2 && g1 == g2 && b1 == b2 && a1 == a2 {
     return 0.0
   }
-  let (rf1, gf1, bf1, rf2, gf2, bf2) : (Double, Double, Double, Double, Double, Double) = if a1 == a2 &&
-    a1 == 255 {
-    (
-      r1.to_double(), g1.to_double(), b1.to_double(),
-      r2.to_double(), g2.to_double(), b2.to_double(),
-    )
-  } else {
-    let alpha1 = a1.to_double() / 255.0
-    let white1 = 255.0 * (1.0 - alpha1)
-    let alpha2 = a2.to_double() / 255.0
-    let white2 = 255.0 * (1.0 - alpha2)
-    (
-      r1.to_double() * alpha1 + white1, g1.to_double() * alpha1 + white1,
-      b1.to_double() * alpha1 + white1, r2.to_double() * alpha2 + white2,
-      g2.to_double() * alpha2 + white2, b2.to_double() * alpha2 + white2,
-    )
+  let mut dr = (r1 - r2).to_double()
+  let mut dg = (g1 - g2).to_double()
+  let mut db = (b1 - b2).to_double()
+  let da = (a1 - a2).to_double()
+  if a1 < 255 || a2 < 255 {
+    let rb = 48.0 + 159.0 * (base1 % 2).to_double()
+    let gb = 48.0 + 159.0 * ((base1.to_double() / 1.618033988749895).to_int() % 2).to_double()
+    let bb = 48.0 + 159.0 * ((base1.to_double() / 2.618033988749895).to_int() % 2).to_double()
+    dr = (r1.to_double() * a1.to_double() - r2.to_double() * a2.to_double() - rb * da) / 255.0
+    dg = (g1.to_double() * a1.to_double() - g2.to_double() * a2.to_double() - gb * da) / 255.0
+    db = (b1.to_double() * a1.to_double() - b2.to_double() * a2.to_double() - bb * da) / 255.0
   }
-  let dr = rf1 - rf2
-  let dg = gf1 - gf2
-  let db = bf1 - bf2
   let y = 0.29889531 * dr + 0.58662247 * dg + 0.11448223 * db
   let i = 0.59597799 * dr - 0.27417610 * dg - 0.32180189 * db
   let q = 0.21147017 * dr - 0.52261711 * dg + 0.31114694 * db
@@ -936,7 +848,7 @@ pub fn compensated_diff(
   }
   let width = img1.width
   let height = img1.height
-  let max_delta = 35215.0 * threshold * threshold * threshold * threshold
+  let max_delta = 35215.0 * threshold * threshold
   let data1 = img1.data
   let data2 = img2.data
   let mut count = 0
