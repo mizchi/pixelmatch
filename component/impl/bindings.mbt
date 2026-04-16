@@ -15,7 +15,7 @@ pub fn cabi_realloc(
 pub(all) struct MatchResult {
   diff_count : UInt
   output : Array[Byte]?
-} derive(Show, Eq)
+} derive(Debug, Eq)
 
 pub fn wasmExportDiffReport(img1_data_ptr : Int, img1_data_len : Int, img2_data_ptr : Int, img2_data_len : Int, width : Int, height : Int, threshold : Double, include_aa : Int, alpha : Double, diff_mask : Int, grid_size : Int, detect_shift : Int) -> Int {
   let img1_data : Array[Byte] = {

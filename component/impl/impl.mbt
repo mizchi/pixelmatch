@@ -2,7 +2,16 @@
 fn bytes_to_image(data : Array[Byte], width : UInt, height : UInt) -> @pm.Image {
   let w = width.reinterpret_as_int()
   let h = height.reinterpret_as_int()
-  let pixels : Array[@pm.Color] = []
+  let expected = w * h * 4
+  if data.length() != expected {
+    abort(
+      "bytes_to_image: expected " +
+      expected.to_string() +
+      " bytes, got " +
+      data.length().to_string(),
+    )
+  }
+  let pixels : Array[@pm.Color] = Array::new(capacity=w * h)
   let mut i = 0
   while i + 3 < data.length() {
     pixels.push(
