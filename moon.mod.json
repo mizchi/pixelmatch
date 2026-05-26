@@ -1,6 +1,6 @@
 {
   "name": "mizchi/pixelmatch",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "deps": {
     "mizchi/image": "0.1.2"
   },
