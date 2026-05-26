@@ -498,18 +498,11 @@ pub fn pixelmatch_simple_prefilter(
   let data1 = img1.data
   let data2 = img2.data
   let mut diff_count = 0
+  let row_ints = width * 4
   for y in 0..<height {
-    let row_start = y * width * 4
-    let row_end = row_start + width * 4
-    // Fast path: check if entire row is identical
-    let mut row_identical = true
-    for i = row_start; i < row_end; i = i + 1 {
-      if data1[i] != data2[i] {
-        row_identical = false
-        break
-      }
-    }
-    if row_identical {
+    let row_start = y * row_ints
+    // Fast path: check if entire row is identical (SIMD on wasm, scalar elsewhere).
+    if row_i32_equal(data1, row_start, data2, row_start, row_ints) {
       continue
     }
     // Slow path: compute per-pixel delta for this row

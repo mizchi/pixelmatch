@@ -10,5 +10,7 @@ options(
     "bench_native_test.mbt": [ "native" ],
     "lib_native.mbt": [ "native" ],
     "lib_nonnative.mbt": [ "not", "native" ],
+    "row_eq_scalar.mbt": [ "not", "wasm" ],
+    "row_eq_simd.mbt": [ "wasm" ],
   },
 )
