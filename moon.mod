@@ -1,0 +1,19 @@
+name = "mizchi/pixelmatch"
+
+version = "0.6.1"
+
+import {
+  "mizchi/image@0.1.2",
+}
+
+readme = "README.md"
+
+repository = "https://github.com/mizchi/pixelmatch"
+
+license = "Apache-2.0"
+
+keywords = [ "image", "comparison", "diff", "testing" ]
+
+description = "Fast pixel-level image comparison library for MoonBit/WASM"
+
+source = "src"
