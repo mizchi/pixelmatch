@@ -239,7 +239,10 @@ test "diff_report with differences" {
     }
   }
   // include_aa: true to count all diff pixels exactly
-  let report = diff_report(img1, img2, { ..Options::default(), include_aa: true })
+  let report = diff_report(img1, img2, {
+    ..Options::default(),
+    include_aa: true,
+  })
   assert_eq(report.diff_count, 25) // 5x5 = 25 pixels
   assert_true(report.regions.length() >= 1)
   // Check that region covers the diff area
@@ -345,7 +348,10 @@ test "diff_report classifies edge region" {
     img2.set_pixel(x, 50, Color::rgba(255, 255, 255, 255))
   }
   // include_aa: true to ensure thin line isn't filtered as AA
-  let report = diff_report(img1, img2, { ..Options::default(), include_aa: true })
+  let report = diff_report(img1, img2, {
+    ..Options::default(),
+    include_aa: true,
+  })
   assert_true(report.regions.length() >= 1)
   assert_eq(report.regions[0].region_type, "edge")
 }
@@ -432,14 +438,14 @@ test "detect_global_shift finds known offset" {
   let img1 = Image::new(20, 40)
   let img2 = Image::new(20, 40)
   for y in 0..<40 {
-    let v = (y * 6) % 256
+    let v = y * 6 % 256
     for x in 0..<20 {
       img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
   for y in 0..<40 {
     let src_y = y - 5
-    let v = if src_y >= 0 && src_y < 40 { (src_y * 6) % 256 } else { 0 }
+    let v = if src_y >= 0 && src_y < 40 { src_y * 6 % 256 } else { 0 }
     for x in 0..<20 {
       img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
@@ -472,20 +478,20 @@ test "detect_piecewise_shift finds multiple offsets" {
   let img1 = Image::new(20, 100)
   let img2 = Image::new(20, 100)
   for y in 0..<100 {
-    let v = (y * 5) % 256
+    let v = y * 5 % 256
     for x in 0..<20 {
       img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
   for y in 0..<50 {
-    let v = (y * 5) % 256
+    let v = y * 5 % 256
     for x in 0..<20 {
       img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
   for y in 50..<100 {
     let src_y = y - 3
-    let v = if src_y >= 0 && src_y < 100 { (src_y * 5) % 256 } else { 0 }
+    let v = if src_y >= 0 && src_y < 100 { src_y * 5 % 256 } else { 0 }
     for x in 0..<20 {
       img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
@@ -504,14 +510,14 @@ test "diff_report with shift compensation" {
   let img1 = Image::new(20, 40)
   let img2 = Image::new(20, 40)
   for y in 0..<40 {
-    let v = (y * 6) % 256
+    let v = y * 6 % 256
     for x in 0..<20 {
       img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
   for y in 0..<40 {
     let src_y = y - 5
-    let v = if src_y >= 0 && src_y < 40 { (src_y * 6) % 256 } else { 0 }
+    let v = if src_y >= 0 && src_y < 40 { src_y * 6 % 256 } else { 0 }
     for x in 0..<20 {
       img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
@@ -545,14 +551,14 @@ test "diff_report to_json includes shift fields when enabled" {
   let img1 = Image::new(20, 40)
   let img2 = Image::new(20, 40)
   for y in 0..<40 {
-    let v = (y * 6) % 256
+    let v = y * 6 % 256
     for x in 0..<20 {
       img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
   for y in 0..<40 {
     let src_y = y - 5
-    let v = if src_y >= 0 && src_y < 40 { (src_y * 6) % 256 } else { 0 }
+    let v = if src_y >= 0 && src_y < 40 { src_y * 6 % 256 } else { 0 }
     for x in 0..<20 {
       img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }

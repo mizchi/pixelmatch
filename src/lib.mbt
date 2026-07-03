@@ -12,7 +12,7 @@ pub(all) struct Color {
 } derive(Debug, Eq)
 
 ///|
-pub impl Show for Color with output(self, logger) {
+pub impl Show for Color with fn output(self, logger) {
   logger.write_string("Color(r=")
   logger.write_string(self.r.to_string())
   logger.write_string(", g=")
@@ -220,7 +220,7 @@ fn color_delta(
   b2 : Int,
   a2 : Int,
   y_only : Bool,
-  pos~ : Int = 0,
+  pos? : Int = 0,
 ) -> Double {
   let mut dr = (r1 - r2).to_double()
   let mut dg = (g1 - g2).to_double()
@@ -233,11 +233,28 @@ fn color_delta(
   // Alpha blending against a checkerboard background (matching mapbox/pixelmatch)
   if a1 < 255 || a2 < 255 {
     let rb = 48.0 + 159.0 * (pos % 2).to_double()
-    let gb = 48.0 + 159.0 * ((pos.to_double() / 1.618033988749895).to_int() % 2).to_double()
-    let bb = 48.0 + 159.0 * ((pos.to_double() / 2.618033988749895).to_int() % 2).to_double()
-    dr = (r1.to_double() * a1.to_double() - r2.to_double() * a2.to_double() - rb * da) / 255.0
-    dg = (g1.to_double() * a1.to_double() - g2.to_double() * a2.to_double() - gb * da) / 255.0
-    db = (b1.to_double() * a1.to_double() - b2.to_double() * a2.to_double() - bb * da) / 255.0
+    let gb = 48.0 +
+      159.0 * ((pos.to_double() / 1.618033988749895).to_int() % 2).to_double()
+    let bb = 48.0 +
+      159.0 * ((pos.to_double() / 2.618033988749895).to_int() % 2).to_double()
+    dr = (
+        r1.to_double() * a1.to_double() -
+        r2.to_double() * a2.to_double() -
+        rb * da
+      ) /
+      255.0
+    dg = (
+        g1.to_double() * a1.to_double() -
+        g2.to_double() * a2.to_double() -
+        gb * da
+      ) /
+      255.0
+    db = (
+        b1.to_double() * a1.to_double() -
+        b2.to_double() * a2.to_double() -
+        bb * da
+      ) /
+      255.0
   }
   // Calculate YIQ components
   // Y (luminance)
@@ -281,29 +298,31 @@ fn color_delta_at(
 }
 
 ///|
-/// Compute luminance delta between two positions in the same image (Y only)
-fn luminance_delta_between(
+fn opaque_luminance(r : Int, g : Int, b : Int) -> Double {
+  0.29889531 * r.to_double() +
+  0.58662247 * g.to_double() +
+  0.11448223 * b.to_double()
+}
+
+///|
+fn luminance_delta_from_rgba(
   data : FixedArray[Int],
-  width : Int,
-  x1 : Int,
-  y1 : Int,
-  x2 : Int,
-  y2 : Int,
+  idx1 : Int,
+  idx2 : Int,
+  r1 : Int,
+  g1 : Int,
+  b1 : Int,
+  a1 : Int,
+  y1 : Double,
 ) -> Double {
-  let idx1 = (y1 * width + x1) * 4
-  let idx2 = (y2 * width + x2) * 4
-  color_delta(
-    data[idx1],
-    data[idx1 + 1],
-    data[idx1 + 2],
-    data[idx1 + 3],
-    data[idx2],
-    data[idx2 + 1],
-    data[idx2 + 2],
-    data[idx2 + 3],
-    true,
-    pos=idx1,
-  )
+  let r2 = data[idx2]
+  let g2 = data[idx2 + 1]
+  let b2 = data[idx2 + 2]
+  let a2 = data[idx2 + 3]
+  if a1 == 255 && a2 == 255 {
+    return y1 - opaque_luminance(r2, g2, b2)
+  }
+  color_delta(r1, g1, b1, a1, r2, g2, b2, a2, true, pos=idx1)
 }
 
 ///|
@@ -316,20 +335,39 @@ fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
   let y_lo = if y > 0 { y - 1 } else { 0 }
   let y_hi = if y < height - 1 { y + 1 } else { height - 1 }
   // Boundary pixels get a head start for zeroes count
-  let mut zeroes = if x == x_lo || x == x_hi || y == y_lo || y == y_hi { 1 } else { 0 }
+  let mut zeroes = if x == x_lo || x == x_hi || y == y_lo || y == y_hi {
+    1
+  } else {
+    0
+  }
   let mut min_delta = 0.0
   let mut max_delta = 0.0
+  let data1 = img1.data
+  let center_idx = (y * width + x) * 4
   let mut min_x = x
   let mut min_y = y
   let mut max_x = x
   let mut max_y = y
-  let data1 = img1.data
+  let r = data1[center_idx]
+  let g = data1[center_idx + 1]
+  let b = data1[center_idx + 2]
+  let a = data1[center_idx + 3]
+  let center_y = opaque_luminance(r, g, b)
   let mut ny = y_lo
   while ny <= y_hi {
     let mut nx = x_lo
     while nx <= x_hi {
       if nx != x || ny != y {
-        let delta = luminance_delta_between(data1, width, x, y, nx, ny)
+        let delta = luminance_delta_from_rgba(
+          data1,
+          center_idx,
+          (ny * width + nx) * 4,
+          r,
+          g,
+          b,
+          a,
+          center_y,
+        )
         if delta == 0.0 {
           zeroes += 1
           // If more than 2 identical neighbors, it's definitely not anti-aliasing
@@ -378,19 +416,78 @@ fn has_many_siblings(img : Image, x : Int, y : Int) -> Bool {
   let g = data[idx + 1]
   let b = data[idx + 2]
   let a = data[idx + 3]
+  if x > 0 && x < width - 1 && y > 0 && y < height - 1 {
+    let row = width * 4
+    let mut count = 0
+    let n = idx - row - 4
+    if data[n] == r && data[n + 1] == g && data[n + 2] == b && data[n + 3] == a {
+      count += 1
+    }
+    let n = idx - row
+    if data[n] == r && data[n + 1] == g && data[n + 2] == b && data[n + 3] == a {
+      count += 1
+    }
+    let n = idx - row + 4
+    if data[n] == r && data[n + 1] == g && data[n + 2] == b && data[n + 3] == a {
+      count += 1
+      if count > 2 {
+        return true
+      }
+    }
+    let n = idx - 4
+    if data[n] == r && data[n + 1] == g && data[n + 2] == b && data[n + 3] == a {
+      count += 1
+      if count > 2 {
+        return true
+      }
+    }
+    let n = idx + 4
+    if data[n] == r && data[n + 1] == g && data[n + 2] == b && data[n + 3] == a {
+      count += 1
+      if count > 2 {
+        return true
+      }
+    }
+    let n = idx + row - 4
+    if data[n] == r && data[n + 1] == g && data[n + 2] == b && data[n + 3] == a {
+      count += 1
+      if count > 2 {
+        return true
+      }
+    }
+    let n = idx + row
+    if data[n] == r && data[n + 1] == g && data[n + 2] == b && data[n + 3] == a {
+      count += 1
+      if count > 2 {
+        return true
+      }
+    }
+    let n = idx + row + 4
+    if data[n] == r && data[n + 1] == g && data[n + 2] == b && data[n + 3] == a {
+      count += 1
+    }
+    return count > 2
+  }
   let x_lo = if x > 0 { x - 1 } else { 0 }
   let x_hi = if x < width - 1 { x + 1 } else { width - 1 }
   let y_lo = if y > 0 { y - 1 } else { 0 }
   let y_hi = if y < height - 1 { y + 1 } else { height - 1 }
   // Boundary pixels get a head start (matching original: zeroes starts at 1 on boundary)
-  let mut count = if x == x_lo || x == x_hi || y == y_lo || y == y_hi { 1 } else { 0 }
+  let mut count = if x == x_lo || x == x_hi || y == y_lo || y == y_hi {
+    1
+  } else {
+    0
+  }
   let mut ny = y_lo
   while ny <= y_hi {
     let mut nx = x_lo
     while nx <= x_hi {
       if nx != x || ny != y {
         let n = (ny * width + nx) * 4
-        if data[n] == r && data[n + 1] == g && data[n + 2] == b && data[n + 3] == a {
+        if data[n] == r &&
+          data[n + 1] == g &&
+          data[n + 2] == b &&
+          data[n + 3] == a {
           count += 1
           if count > 2 {
             return true
@@ -445,11 +542,28 @@ fn color_delta_inline(
   let da = (a1 - a2).to_double()
   if a1 < 255 || a2 < 255 {
     let rb = 48.0 + 159.0 * (base % 2).to_double()
-    let gb = 48.0 + 159.0 * ((base.to_double() / 1.618033988749895).to_int() % 2).to_double()
-    let bb = 48.0 + 159.0 * ((base.to_double() / 2.618033988749895).to_int() % 2).to_double()
-    dr = (r1.to_double() * a1.to_double() - r2.to_double() * a2.to_double() - rb * da) / 255.0
-    dg = (g1.to_double() * a1.to_double() - g2.to_double() * a2.to_double() - gb * da) / 255.0
-    db = (b1.to_double() * a1.to_double() - b2.to_double() * a2.to_double() - bb * da) / 255.0
+    let gb = 48.0 +
+      159.0 * ((base.to_double() / 1.618033988749895).to_int() % 2).to_double()
+    let bb = 48.0 +
+      159.0 * ((base.to_double() / 2.618033988749895).to_int() % 2).to_double()
+    dr = (
+        r1.to_double() * a1.to_double() -
+        r2.to_double() * a2.to_double() -
+        rb * da
+      ) /
+      255.0
+    dg = (
+        g1.to_double() * a1.to_double() -
+        g2.to_double() * a2.to_double() -
+        gb * da
+      ) /
+      255.0
+    db = (
+        b1.to_double() * a1.to_double() -
+        b2.to_double() * a2.to_double() -
+        bb * da
+      ) /
+      255.0
   }
   let y = 0.29889531 * dr + 0.58662247 * dg + 0.11448223 * db
   let i = 0.59597799 * dr - 0.27417610 * dg - 0.32180189 * db
@@ -623,7 +737,11 @@ fn cross_correlate_at(
     sum_yy += y * y
   }
   let denom = (sum_xx * sum_yy).sqrt()
-  if denom > 0.0 { sum_xy / denom } else { 0.0 }
+  if denom > 0.0 {
+    sum_xy / denom
+  } else {
+    0.0
+  }
 }
 
 ///|
@@ -708,7 +826,9 @@ fn detect_window_shift(
   if limit <= 16 {
     let mut off = -limit
     while off <= limit {
-      let corr = cross_correlate_at(profile1, offset, profile2, offset, len, len, off)
+      let corr = cross_correlate_at(
+        profile1, offset, profile2, offset, len, len, off,
+      )
       if corr > best_corr {
         best_corr = corr
         best_offset = off
@@ -722,19 +842,31 @@ fn detect_window_shift(
   let mut coarse_best = 0
   let mut off = -limit
   while off <= limit {
-    let corr = cross_correlate_at(profile1, offset, profile2, offset, len, len, off)
+    let corr = cross_correlate_at(
+      profile1, offset, profile2, offset, len, len, off,
+    )
     if corr > best_corr {
       best_corr = corr
       coarse_best = off
     }
     off += stride
   }
-  let refine_lo = if coarse_best - stride > -limit { coarse_best - stride } else { -limit }
-  let refine_hi = if coarse_best + stride < limit { coarse_best + stride } else { limit }
+  let refine_lo = if coarse_best - stride > -limit {
+    coarse_best - stride
+  } else {
+    -limit
+  }
+  let refine_hi = if coarse_best + stride < limit {
+    coarse_best + stride
+  } else {
+    limit
+  }
   best_offset = coarse_best
   off = refine_lo
   while off <= refine_hi {
-    let corr = cross_correlate_at(profile1, offset, profile2, offset, len, len, off)
+    let corr = cross_correlate_at(
+      profile1, offset, profile2, offset, len, len, off,
+    )
     if corr > best_corr {
       best_corr = corr
       best_offset = off
@@ -750,7 +882,7 @@ pub fn detect_piecewise_shift(
   profile1 : FixedArray[Double],
   profile2 : FixedArray[Double],
   max_shift : Int,
-  window_size~ : Int = 100,
+  window_size? : Int = 100,
 ) -> Array[ShiftRegion] {
   let n = profile1.length()
   if n == 0 {
@@ -783,13 +915,21 @@ pub fn detect_piecewise_shift(
     if w_shift == current_shift {
       current_end = w_end
     } else {
-      regions.push({ y_start: current_start, y_end: current_end, shift: current_shift })
+      regions.push({
+        y_start: current_start,
+        y_end: current_end,
+        shift: current_shift,
+      })
       current_start = current_end
       current_end = w_end
       current_shift = w_shift
     }
   }
-  regions.push({ y_start: current_start, y_end: current_end, shift: current_shift })
+  regions.push({
+    y_start: current_start,
+    y_end: current_end,
+    shift: current_shift,
+  })
   regions
 }
 
@@ -817,11 +957,28 @@ fn color_delta_inline2(
   let da = (a1 - a2).to_double()
   if a1 < 255 || a2 < 255 {
     let rb = 48.0 + 159.0 * (base1 % 2).to_double()
-    let gb = 48.0 + 159.0 * ((base1.to_double() / 1.618033988749895).to_int() % 2).to_double()
-    let bb = 48.0 + 159.0 * ((base1.to_double() / 2.618033988749895).to_int() % 2).to_double()
-    dr = (r1.to_double() * a1.to_double() - r2.to_double() * a2.to_double() - rb * da) / 255.0
-    dg = (g1.to_double() * a1.to_double() - g2.to_double() * a2.to_double() - gb * da) / 255.0
-    db = (b1.to_double() * a1.to_double() - b2.to_double() * a2.to_double() - bb * da) / 255.0
+    let gb = 48.0 +
+      159.0 * ((base1.to_double() / 1.618033988749895).to_int() % 2).to_double()
+    let bb = 48.0 +
+      159.0 * ((base1.to_double() / 2.618033988749895).to_int() % 2).to_double()
+    dr = (
+        r1.to_double() * a1.to_double() -
+        r2.to_double() * a2.to_double() -
+        rb * da
+      ) /
+      255.0
+    dg = (
+        g1.to_double() * a1.to_double() -
+        g2.to_double() * a2.to_double() -
+        gb * da
+      ) /
+      255.0
+    db = (
+        b1.to_double() * a1.to_double() -
+        b2.to_double() * a2.to_double() -
+        bb * da
+      ) /
+      255.0
   }
   let y = 0.29889531 * dr + 0.58662247 * dg + 0.11448223 * db
   let i = 0.59597799 * dr - 0.27417610 * dg - 0.32180189 * db
@@ -844,6 +1001,7 @@ pub fn compensated_diff(
   let max_delta = 35215.0 * threshold * threshold
   let data1 = img1.data
   let data2 = img2.data
+  let row_len = width * 4
   let mut count = 0
   for region in shift_regions {
     for y in region.y_start..<region.y_end {
@@ -855,24 +1013,29 @@ pub fn compensated_diff(
       let row1 = src_y * width * 4
       let row2 = y * width * 4
       // Row prefilter: skip if rows are identical after shift
-      let row_len = width * 4
       let mut row_identical = true
-      for i in 0..<row_len {
+      let mut i = 0
+      while i < row_len {
         if data1[row1 + i] != data2[row2 + i] {
           row_identical = false
           break
         }
+        i += 1
       }
       if row_identical {
         continue
       }
-      for x in 0..<width {
-        let base1 = row1 + x * 4
-        let base2 = row2 + x * 4
+      let mut base1 = row1
+      let mut base2 = row2
+      let mut x = 0
+      while x < width {
         let delta = color_delta_inline2(data1, base1, data2, base2)
         if delta > max_delta {
           count += 1
         }
+        base1 += 4
+        base2 += 4
+        x += 1
       }
     }
   }
@@ -1022,6 +1185,7 @@ fn find_diff_regions_flat(
 ) -> Array[DiffRegion] {
   let size = width * height
   let visited : FixedArray[Bool] = FixedArray::make(size, false)
+  let stack : FixedArray[Int] = FixedArray::make(size, 0)
   let regions : Array[DiffRegion] = []
   for y in 0..<height {
     for x in 0..<width {
@@ -1033,14 +1197,13 @@ fn find_diff_regions_flat(
         let mut min_y = y
         let mut max_y = y
         let mut pixel_count = 0
-        // Simple flood fill using stack - pre-check bounds before push
-        let stack : Array[Int] = [idx]
-        while stack.length() > 0 {
-          let cidx = stack.pop().unwrap()
-          if visited[cidx] || !diff_map[cidx] {
-            continue
-          }
-          visited[cidx] = true
+        // Flood fill with a fixed stack. Mark on push to avoid duplicate entries.
+        visited[idx] = true
+        stack[0] = idx
+        let mut stack_top = 1
+        while stack_top > 0 {
+          stack_top -= 1
+          let cidx = stack[stack_top]
           pixel_count += 1
           let cx = cidx % width
           let cy = cidx / width
@@ -1061,25 +1224,33 @@ fn find_diff_regions_flat(
           if cx > 0 {
             let n = cidx - 1
             if !visited[n] && diff_map[n] {
-              stack.push(n)
+              visited[n] = true
+              stack[stack_top] = n
+              stack_top += 1
             }
           }
           if cx < width - 1 {
             let n = cidx + 1
             if !visited[n] && diff_map[n] {
-              stack.push(n)
+              visited[n] = true
+              stack[stack_top] = n
+              stack_top += 1
             }
           }
           if cy > 0 {
             let n = cidx - width
             if !visited[n] && diff_map[n] {
-              stack.push(n)
+              visited[n] = true
+              stack[stack_top] = n
+              stack_top += 1
             }
           }
           if cy < height - 1 {
             let n = cidx + width
             if !visited[n] && diff_map[n] {
-              stack.push(n)
+              visited[n] = true
+              stack[stack_top] = n
+              stack_top += 1
             }
           }
         }
@@ -1092,9 +1263,7 @@ fn find_diff_regions_flat(
             diff_pixels: pixel_count,
             region_type: "",
           }
-          regions.push(
-            { ..region, region_type: classify_region(region, width) },
-          )
+          regions.push({ ..region, region_type: classify_region(region, width) })
         }
       }
     }
@@ -1195,11 +1364,19 @@ pub fn DiffReport::to_text(self : DiffReport) -> String {
   if self.global_shift != 0 || self.shift_regions.length() > 0 {
     s += "\nShift Analysis:\n"
     s += "  Global shift: " + self.global_shift.to_string() + "px\n"
-    s += "  Compensated diff: " + self.compensated_diff_count.to_string() + " pixels\n"
+    s += "  Compensated diff: " +
+      self.compensated_diff_count.to_string() +
+      " pixels\n"
     if self.shift_regions.length() > 0 {
       s += "  Shift regions:\n"
       for sr in self.shift_regions {
-        s += "    y=[" + sr.y_start.to_string() + ".." + sr.y_end.to_string() + "] shift=" + sr.shift.to_string() + "px\n"
+        s += "    y=[" +
+          sr.y_start.to_string() +
+          ".." +
+          sr.y_end.to_string() +
+          "] shift=" +
+          sr.shift.to_string() +
+          "px\n"
       }
     }
   }
@@ -1464,7 +1641,9 @@ pub fn DiffReport::to_json(self : DiffReport) -> String {
     self.content_change_count.to_string() +
     ",\n"
   s += "  \"global_shift\": " + self.global_shift.to_string() + ",\n"
-  s += "  \"compensated_diff_count\": " + self.compensated_diff_count.to_string() + ",\n"
+  s += "  \"compensated_diff_count\": " +
+    self.compensated_diff_count.to_string() +
+    ",\n"
   s += "  \"shift_regions\": [\n"
   for i, sr in self.shift_regions {
     s += "    {\"y_start\": " + sr.y_start.to_string()

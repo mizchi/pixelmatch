@@ -248,14 +248,14 @@ test "bench: detect_global_shift 200" (b : @bench.T) {
   let img1 = Image::new(20, 200)
   let img2 = Image::new(20, 200)
   for y in 0..<200 {
-    let v = (y * 6) % 256
+    let v = y * 6 % 256
     for x in 0..<20 {
       img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
   for y in 0..<200 {
     let src_y = y - 10
-    let v = if src_y >= 0 && src_y < 200 { (src_y * 6) % 256 } else { 0 }
+    let v = if src_y >= 0 && src_y < 200 { src_y * 6 % 256 } else { 0 }
     for x in 0..<20 {
       img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
@@ -271,14 +271,14 @@ test "bench: detect_global_shift 1000" (b : @bench.T) {
   let img1 = Image::new(10, 1000)
   let img2 = Image::new(10, 1000)
   for y in 0..<1000 {
-    let v = (y * 3) % 256
+    let v = y * 3 % 256
     for x in 0..<10 {
       img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
   for y in 0..<1000 {
     let src_y = y - 20
-    let v = if src_y >= 0 && src_y < 1000 { (src_y * 3) % 256 } else { 0 }
+    let v = if src_y >= 0 && src_y < 1000 { src_y * 3 % 256 } else { 0 }
     for x in 0..<10 {
       img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
@@ -294,20 +294,20 @@ test "bench: detect_piecewise_shift 1000" (b : @bench.T) {
   let img1 = Image::new(10, 1000)
   let img2 = Image::new(10, 1000)
   for y in 0..<1000 {
-    let v = (y * 3) % 256
+    let v = y * 3 % 256
     for x in 0..<10 {
       img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
   for y in 0..<500 {
-    let v = (y * 3) % 256
+    let v = y * 3 % 256
     for x in 0..<10 {
       img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
   for y in 500..<1000 {
     let src_y = y - 20
-    let v = if src_y >= 0 && src_y < 1000 { (src_y * 3) % 256 } else { 0 }
+    let v = if src_y >= 0 && src_y < 1000 { src_y * 3 % 256 } else { 0 }
     for x in 0..<10 {
       img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
@@ -323,19 +323,21 @@ test "bench: compensated_diff 200x200" (b : @bench.T) {
   let img1 = Image::new(200, 200)
   let img2 = Image::new(200, 200)
   for y in 0..<200 {
-    let v = (y * 6) % 256
+    let v = y * 6 % 256
     for x in 0..<200 {
       img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
   for y in 0..<200 {
     let src_y = y - 10
-    let v = if src_y >= 0 && src_y < 200 { (src_y * 6) % 256 } else { 0 }
+    let v = if src_y >= 0 && src_y < 200 { src_y * 6 % 256 } else { 0 }
     for x in 0..<200 {
       img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
-  let shift_regions : Array[ShiftRegion] = [{ y_start: 0, y_end: 200, shift: 10 }]
+  let shift_regions : Array[ShiftRegion] = [
+    { y_start: 0, y_end: 200, shift: 10 },
+  ]
   b.bench(() => b.keep(compensated_diff(img1, img2, shift_regions, 0.1)))
 }
 
@@ -345,14 +347,14 @@ test "bench: diff_report shift noAA 200x200" (b : @bench.T) {
   let img1 = Image::new(200, 200)
   let img2 = Image::new(200, 200)
   for y in 0..<200 {
-    let v = (y * 6) % 256
+    let v = y * 6 % 256
     for x in 0..<200 {
       img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
   for y in 0..<200 {
     let src_y = y - 10
-    let v = if src_y >= 0 && src_y < 200 { (src_y * 6) % 256 } else { 0 }
+    let v = if src_y >= 0 && src_y < 200 { src_y * 6 % 256 } else { 0 }
     for x in 0..<200 {
       img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
@@ -367,14 +369,14 @@ test "bench: diff_report shift 200x200" (b : @bench.T) {
   let img1 = Image::new(200, 200)
   let img2 = Image::new(200, 200)
   for y in 0..<200 {
-    let v = (y * 6) % 256
+    let v = y * 6 % 256
     for x in 0..<200 {
       img1.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
   }
   for y in 0..<200 {
     let src_y = y - 10
-    let v = if src_y >= 0 && src_y < 200 { (src_y * 6) % 256 } else { 0 }
+    let v = if src_y >= 0 && src_y < 200 { src_y * 6 % 256 } else { 0 }
     for x in 0..<200 {
       img2.set_pixel(x, y, Color::rgba(v, v, v, 255))
     }
