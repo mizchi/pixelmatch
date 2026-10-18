@@ -2,22 +2,22 @@
 /// Native-only: C memcmp-based row equality check (zero-copy)
 #borrow(a, b)
 extern "C" fn c_row_equal(
-  a : FixedArray[Int],
-  b : FixedArray[Int],
-  offset : Int,
-  len : Int,
-) -> Int = "c_row_equal"
+  a : FixedArray[Int32],
+  b : FixedArray[Int32],
+  offset : Int32,
+  len : Int32,
+) -> Int32 = "c_row_equal"
 
 ///|
 /// Native-only: C-optimized row diff count with YIQ delta (zero-copy)
 #borrow(data1, data2)
 extern "C" fn c_row_diff_count(
-  data1 : FixedArray[Int],
-  data2 : FixedArray[Int],
-  row_start : Int,
-  width : Int,
+  data1 : FixedArray[Int32],
+  data2 : FixedArray[Int32],
+  row_start : Int32,
+  width : Int32,
   max_delta : Double,
-) -> Int = "c_row_diff_count"
+) -> Int32 = "c_row_diff_count"
 
 ///|
 /// Native-optimized pixelmatch using C memcmp + C YIQ delta.
@@ -27,12 +27,16 @@ extern "C" fn c_row_diff_count(
 /// Fastest available simple comparison for this target.
 /// On native: C FFI with hardware memcmp + LLVM auto-vectorized YIQ delta.
 /// On JS/WASM: falls back to pixelmatch_simple_prefilter (defined in lib_nonjs.mbt).
-pub fn pixelmatch_fast(img1 : Image, img2 : Image, threshold : Double) -> Int {
+pub fn pixelmatch_fast(img1 : Image, img2 : Image, threshold : Double) -> Int32 {
   pixelmatch_native(img1, img2, threshold)
 }
 
 ///|
-pub fn pixelmatch_native(img1 : Image, img2 : Image, threshold : Double) -> Int {
+pub fn pixelmatch_native(
+  img1 : Image,
+  img2 : Image,
+  threshold : Double,
+) -> Int32 {
   if img1.width != img2.width || img1.height != img2.height {
     abort("Image dimensions must match")
   }

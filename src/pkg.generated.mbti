@@ -35,8 +35,13 @@ pub(all) struct Color {
   b : Int
   a : Int
 } derive(Eq, @debug.Debug)
+pub fn Color::equal(Self, Self) -> Bool
+pub fn Color::not_equal(Self, Self) -> Bool
+pub fn Color::output(Self, &Logger) -> Unit
 pub fn Color::rgb(Int, Int, Int) -> Self
 pub fn Color::rgba(Int, Int, Int, Int) -> Self
+pub fn Color::to_repr(Self) -> @debug.Repr
+pub fn Color::to_string(Self) -> String
 pub impl Show for Color
 
 pub(all) struct DiffRegion {
@@ -101,4 +106,3 @@ pub(all) struct ShiftRegion {
 // Type aliases
 
 // Traits
-

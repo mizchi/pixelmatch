@@ -1,9 +1,10 @@
 name = "mizchi/pixelmatch"
 
-version = "0.6.1"
+version = "0.6.2"
 
 import {
-  "mizchi/image@0.1.2",
+  "mizchi/image@0.4.3",
+  "mizchi/zlib@0.4.10",
 }
 
 readme = "README.md"

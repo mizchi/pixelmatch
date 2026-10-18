@@ -11,11 +11,11 @@
 ///|
 /// True iff `a[a_off..a_off+len]` == `b[b_off..b_off+len]` element-wise.
 fn row_i32_equal(
-  a : FixedArray[Int],
-  a_off : Int,
-  b : FixedArray[Int],
-  b_off : Int,
-  len : Int,
+  a : FixedArray[Int32],
+  a_off : Int32,
+  b : FixedArray[Int32],
+  b_off : Int32,
+  len : Int32,
 ) -> Bool {
   row_i32_equal_v128(a, a_off * 4, b, b_off * 4, len) != 0
 }
@@ -28,10 +28,10 @@ fn row_i32_equal(
 /// Locals: 5 = vec_end (= len & ~3), 6 = i, 7 = mismatch flag (0/1).
 #borrow(a, b)
 fn row_i32_equal_v128(
-  a : FixedArray[Int],
-  a_byte_off : Int,
-  b : FixedArray[Int],
-  b_byte_off : Int,
-  len : Int,
-) -> Int =
+  a : FixedArray[Int32],
+  a_byte_off : Int32,
+  b : FixedArray[Int32],
+  b_byte_off : Int32,
+  len : Int32,
+) -> Int32 =
   #|(func (param i32) (param i32) (param i32) (param i32) (param i32) (result i32) (local i32) (local i32) (local i32) local.get 4 i32.const 2 i32.shr_s i32.const 2 i32.shl local.set 5 block loop local.get 6 local.get 5 i32.ge_s br_if 1 local.get 7 local.get 0 local.get 1 i32.add local.get 6 i32.const 2 i32.shl i32.add v128.load local.get 2 local.get 3 i32.add local.get 6 i32.const 2 i32.shl i32.add v128.load i32x4.eq i8x16.bitmask i32.const 65535 i32.ne i32.or local.set 7 local.get 6 i32.const 4 i32.add local.set 6 br 0 end end block loop local.get 6 local.get 4 i32.ge_s br_if 1 local.get 7 local.get 0 local.get 1 i32.add local.get 6 i32.const 2 i32.shl i32.add i32.load local.get 2 local.get 3 i32.add local.get 6 i32.const 2 i32.shl i32.add i32.load i32.ne i32.or local.set 7 local.get 6 i32.const 1 i32.add local.set 6 br 0 end end local.get 7 i32.eqz)

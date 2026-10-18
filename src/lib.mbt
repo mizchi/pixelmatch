@@ -5,11 +5,20 @@
 ///|
 /// RGBA color representation
 pub(all) struct Color {
-  r : Int
-  g : Int
-  b : Int
-  a : Int
+  r : Int32
+  g : Int32
+  b : Int32
+  a : Int32
 } derive(Debug, Eq)
+
+///|
+pub extend Color with Eq::{not_equal, equal}
+
+///|
+pub extend Color with @debug.Debug::{to_repr}
+
+///|
+pub extend Color with Show::{to_string, output}
 
 ///|
 pub impl Show for Color with fn output(self, logger) {
@@ -25,25 +34,25 @@ pub impl Show for Color with fn output(self, logger) {
 }
 
 ///|
-pub fn Color::rgba(r : Int, g : Int, b : Int, a : Int) -> Color {
-  { r, g, b, a }
+pub fn Color::rgba(r : Int32, g : Int32, b : Int32, a : Int32) -> Color {
+  { r, g, b, a, }
 }
 
 ///|
-pub fn Color::rgb(r : Int, g : Int, b : Int) -> Color {
-  { r, g, b, a: 255 }
+pub fn Color::rgb(r : Int32, g : Int32, b : Int32) -> Color {
+  { r, g, b, a: 255, }
 }
 
 ///|
 /// Image data (RGBA pixels in row-major order)
 pub(all) struct Image {
-  width : Int
-  height : Int
-  data : FixedArray[Int] // [r, g, b, a, r, g, b, a, ...]
+  width : Int32
+  height : Int32
+  data : FixedArray[Int32] // [r, g, b, a, r, g, b, a, ...]
 }
 
 ///|
-pub fn Image::new(width : Int, height : Int) -> Image {
+pub fn Image::new(width : Int32, height : Int32) -> Image {
   if width < 0 || height < 0 {
     abort("Image dimensions must be non-negative")
   }
@@ -53,13 +62,13 @@ pub fn Image::new(width : Int, height : Int) -> Image {
     abort("Image too large: dimensions would overflow")
   }
   let size = width * height * 4
-  { width, height, data: FixedArray::make(size, 0) }
+  { width, height, data: FixedArray::make(size, 0), }
 }
 
 ///|
 pub fn Image::from_pixels(
-  width : Int,
-  height : Int,
+  width : Int32,
+  height : Int32,
   pixels : Array[Color],
 ) -> Image {
   let expected = width * height
@@ -79,11 +88,11 @@ pub fn Image::from_pixels(
     data[base + 2] = pixel.b
     data[base + 3] = pixel.a
   }
-  { width, height, data }
+  { width, height, data, }
 }
 
 ///|
-pub fn Image::get_pixel(self : Image, x : Int, y : Int) -> Color {
+pub fn Image::get_pixel(self : Image, x : Int32, y : Int32) -> Color {
   let idx = (y * self.width + x) * 4
   {
     r: self.data[idx],
@@ -94,7 +103,7 @@ pub fn Image::get_pixel(self : Image, x : Int, y : Int) -> Color {
 }
 
 ///|
-pub fn Image::set_pixel(self : Image, x : Int, y : Int, c : Color) -> Unit {
+pub fn Image::set_pixel(self : Image, x : Int32, y : Int32, c : Color) -> Unit {
   let idx = (y * self.width + x) * 4
   self.data[idx] = c.r
   self.data[idx + 1] = c.g
@@ -144,7 +153,7 @@ pub fn pixelmatch(
   img2 : Image,
   output : Image?,
   options : Options,
-) -> Int {
+) -> Int32 {
   if img1.width != img2.width || img1.height != img2.height {
     abort("Image dimensions must match")
   }
@@ -211,16 +220,16 @@ pub fn pixelmatch(
 /// Calculate color delta between two pixels using YIQ color space
 /// Optimized: inline alpha blending
 fn color_delta(
-  r1 : Int,
-  g1 : Int,
-  b1 : Int,
-  a1 : Int,
-  r2 : Int,
-  g2 : Int,
-  b2 : Int,
-  a2 : Int,
+  r1 : Int32,
+  g1 : Int32,
+  b1 : Int32,
+  a1 : Int32,
+  r2 : Int32,
+  g2 : Int32,
+  b2 : Int32,
+  a2 : Int32,
   y_only : Bool,
-  pos? : Int = 0,
+  pos~ : Int32 = 0,
 ) -> Double {
   let mut dr = (r1 - r2).to_double()
   let mut dg = (g1 - g2).to_double()
@@ -278,8 +287,8 @@ fn color_delta(
 fn color_delta_at(
   img1 : Image,
   img2 : Image,
-  x : Int,
-  y : Int,
+  x : Int32,
+  y : Int32,
   y_only : Bool,
 ) -> Double {
   let idx = (y * img1.width + x) * 4
@@ -298,7 +307,7 @@ fn color_delta_at(
 }
 
 ///|
-fn opaque_luminance(r : Int, g : Int, b : Int) -> Double {
+fn opaque_luminance(r : Int32, g : Int32, b : Int32) -> Double {
   0.29889531 * r.to_double() +
   0.58662247 * g.to_double() +
   0.11448223 * b.to_double()
@@ -306,13 +315,13 @@ fn opaque_luminance(r : Int, g : Int, b : Int) -> Double {
 
 ///|
 fn luminance_delta_from_rgba(
-  data : FixedArray[Int],
-  idx1 : Int,
-  idx2 : Int,
-  r1 : Int,
-  g1 : Int,
-  b1 : Int,
-  a1 : Int,
+  data : FixedArray[Int32],
+  idx1 : Int32,
+  idx2 : Int32,
+  r1 : Int32,
+  g1 : Int32,
+  b1 : Int32,
+  a1 : Int32,
   y1 : Double,
 ) -> Double {
   let r2 = data[idx2]
@@ -327,7 +336,7 @@ fn luminance_delta_from_rgba(
 
 ///|
 /// Check if a pixel is anti-aliased (matching mapbox/pixelmatch algorithm)
-fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
+fn is_antialiased(img1 : Image, img2 : Image, x : Int32, y : Int32) -> Bool {
   let width = img1.width
   let height = img1.height
   let x_lo = if x > 0 { x - 1 } else { 0 }
@@ -407,7 +416,7 @@ fn is_antialiased(img1 : Image, img2 : Image, x : Int, y : Int) -> Bool {
 /// Check if a pixel has 3+ adjacent pixels of the same color.
 /// Uses exact RGBA match (matching mapbox/pixelmatch Uint32 comparison).
 /// Boundary pixels start with count=1 (they have fewer neighbors).
-fn has_many_siblings(img : Image, x : Int, y : Int) -> Bool {
+fn has_many_siblings(img : Image, x : Int32, y : Int32) -> Bool {
   let width = img.width
   let height = img.height
   let data = img.data
@@ -503,7 +512,7 @@ fn has_many_siblings(img : Image, x : Int, y : Int) -> Bool {
 
 ///|
 /// Create a grayscale pixel blended with alpha
-fn blend_gray(img : Image, x : Int, y : Int, alpha : Double) -> Color {
+fn blend_gray(img : Image, x : Int32, y : Int32, alpha : Double) -> Color {
   let idx = (y * img.width + x) * 4
   let r = img.data[idx].to_double()
   let g = img.data[idx + 1].to_double()
@@ -520,9 +529,9 @@ fn blend_gray(img : Image, x : Int, y : Int, alpha : Double) -> Color {
 /// Inline color delta calculation for maximum performance
 /// Returns absolute delta value (always positive)
 fn color_delta_inline(
-  data1 : FixedArray[Int],
-  data2 : FixedArray[Int],
-  base : Int,
+  data1 : FixedArray[Int32],
+  data2 : FixedArray[Int32],
+  base : Int32,
 ) -> Double {
   let r1 = data1[base]
   let g1 = data1[base + 1]
@@ -575,7 +584,11 @@ fn color_delta_inline(
 /// Simple comparison without anti-aliasing detection
 /// Returns the number of different pixels
 /// Optimized: inline delta calculation, minimize function calls
-pub fn pixelmatch_simple(img1 : Image, img2 : Image, threshold : Double) -> Int {
+pub fn pixelmatch_simple(
+  img1 : Image,
+  img2 : Image,
+  threshold : Double,
+) -> Int32 {
   if img1.width != img2.width || img1.height != img2.height {
     abort("Image dimensions must match")
   }
@@ -602,7 +615,7 @@ pub fn pixelmatch_simple_prefilter(
   img1 : Image,
   img2 : Image,
   threshold : Double,
-) -> Int {
+) -> Int32 {
   if img1.width != img2.width || img1.height != img2.height {
     abort("Image dimensions must match")
   }
@@ -649,11 +662,11 @@ pub fn match_ratio(img1 : Image, img2 : Image, options : Options) -> Double {
 ///|
 /// Bounding box for a diff region
 pub(all) struct DiffRegion {
-  x : Int
-  y : Int
-  width : Int
-  height : Int
-  diff_pixels : Int
+  x : Int32
+  y : Int32
+  width : Int32
+  height : Int32
+  diff_pixels : Int32
   region_type : String // "shift" | "content" | "edge"
 }
 
@@ -661,32 +674,32 @@ pub(all) struct DiffRegion {
 /// Comprehensive diff report for AI consumption
 pub(all) struct DiffReport {
   // Basic statistics
-  width : Int
-  height : Int
-  total_pixels : Int
-  diff_count : Int
-  aa_count : Int
+  width : Int32
+  height : Int32
+  total_pixels : Int32
+  diff_count : Int32
+  aa_count : Int32
   match_ratio : Double
   // Grid heatmap (cell values = diff count in that cell)
-  grid : Array[Array[Int]]
-  grid_cols : Int
-  grid_rows : Int
+  grid : Array[Array[Int32]]
+  grid_cols : Int32
+  grid_rows : Int32
   // Diff regions (bounding boxes of clustered differences)
   regions : Array[DiffRegion]
   // Classification summary
   shift_only : Bool
-  content_change_count : Int
+  content_change_count : Int32
   // Shift compensation
-  global_shift : Int
+  global_shift : Int32
   shift_regions : Array[ShiftRegion]
-  compensated_diff_count : Int
+  compensated_diff_count : Int32
 }
 
 ///|
 pub(all) struct ShiftRegion {
-  y_start : Int
-  y_end : Int
-  shift : Int
+  y_start : Int32
+  y_end : Int32
+  shift : Int32
 }
 
 ///|
@@ -715,12 +728,12 @@ pub fn luminance_profile(img : Image) -> FixedArray[Double] {
 /// Compute normalized cross-correlation at a specific offset
 fn cross_correlate_at(
   profile1 : FixedArray[Double],
-  off1 : Int,
+  off1 : Int32,
   profile2 : FixedArray[Double],
-  off2 : Int,
-  len1 : Int,
-  len2 : Int,
-  offset : Int,
+  off2 : Int32,
+  len1 : Int32,
+  len2 : Int32,
+  offset : Int32,
 ) -> Double {
   let mut sum_xy = 0.0
   let mut sum_xx = 0.0
@@ -751,8 +764,8 @@ fn cross_correlate_at(
 pub fn detect_global_shift(
   profile1 : FixedArray[Double],
   profile2 : FixedArray[Double],
-  max_shift : Int,
-) -> Int {
+  max_shift : Int32,
+) -> Int32 {
   let n = profile1.length()
   if n != profile2.length() || n == 0 {
     return 0
@@ -815,10 +828,10 @@ pub fn detect_global_shift(
 fn detect_window_shift(
   profile1 : FixedArray[Double],
   profile2 : FixedArray[Double],
-  offset : Int,
-  len : Int,
-  max_shift : Int,
-) -> Int {
+  offset : Int32,
+  len : Int32,
+  max_shift : Int32,
+) -> Int32 {
   let limit = if max_shift < len / 4 { max_shift } else { len / 4 }
   let mut best_corr = -1.0
   let mut best_offset = 0
@@ -881,8 +894,8 @@ fn detect_window_shift(
 pub fn detect_piecewise_shift(
   profile1 : FixedArray[Double],
   profile2 : FixedArray[Double],
-  max_shift : Int,
-  window_size? : Int = 100,
+  max_shift : Int32,
+  window_size~ : Int32 = 100,
 ) -> Array[ShiftRegion] {
   let n = profile1.length()
   if n == 0 {
@@ -890,7 +903,7 @@ pub fn detect_piecewise_shift(
   }
   let step = window_size / 2
   let step = if step < 1 { 1 } else { step }
-  let window_shifts : Array[(Int, Int, Int)] = []
+  let window_shifts : Array[(Int32, Int32, Int32)] = []
   let mut y = 0
   while y < n {
     let end = if y + window_size > n { n } else { y + window_size }
@@ -903,7 +916,7 @@ pub fn detect_piecewise_shift(
     y += step
   }
   if window_shifts.length() == 0 {
-    return [{ y_start: 0, y_end: n, shift: 0 }]
+    return [{ y_start: 0, y_end: n, shift: 0, }]
   }
   let regions : Array[ShiftRegion] = []
   let (first_start, first_end, first_shift) = window_shifts[0]
@@ -935,10 +948,10 @@ pub fn detect_piecewise_shift(
 
 ///|
 fn color_delta_inline2(
-  data1 : FixedArray[Int],
-  base1 : Int,
-  data2 : FixedArray[Int],
-  base2 : Int,
+  data1 : FixedArray[Int32],
+  base1 : Int32,
+  data2 : FixedArray[Int32],
+  base2 : Int32,
 ) -> Double {
   let r1 = data1[base1]
   let g1 = data1[base1 + 1]
@@ -992,7 +1005,7 @@ pub fn compensated_diff(
   img2 : Image,
   shift_regions : Array[ShiftRegion],
   threshold : Double,
-) -> Int {
+) -> Int32 {
   if img1.width != img2.width || img1.height != img2.height {
     abort("Image dimensions must match")
   }
@@ -1049,7 +1062,7 @@ pub fn diff_report(
   img1 : Image,
   img2 : Image,
   options : Options,
-  grid_size? : Int = 10,
+  grid_size~ : Int32 = 10,
 ) -> DiffReport {
   if img1.width != img2.width || img1.height != img2.height {
     abort("Image dimensions must match")
@@ -1067,7 +1080,7 @@ pub fn diff_report(
   let grid_rows = if height < grid_size { 1 } else { grid_size }
   let cell_w = width / grid_cols
   let cell_h = height / grid_rows
-  let grid : Array[Array[Int]] = Array::make(grid_rows, [])
+  let grid : Array[Array[Int32]] = Array::make(grid_rows, [])
   for i in 0..<grid_rows {
     grid[i] = Array::make(grid_cols, 0)
   }
@@ -1164,7 +1177,7 @@ pub fn diff_report(
 
 ///|
 /// Classify a diff region as "shift", "content", or "edge"
-fn classify_region(region : DiffRegion, image_width : Int) -> String {
+fn classify_region(region : DiffRegion, image_width : Int32) -> String {
   if region.height <= 2 || region.width <= 2 {
     "edge"
   } else if region.width.to_double() / region.height.to_double() > 3.0 &&
@@ -1180,12 +1193,12 @@ fn classify_region(region : DiffRegion, image_width : Int) -> String {
 /// Optimized: use flat arrays, check bounds before push
 fn find_diff_regions_flat(
   diff_map : FixedArray[Bool],
-  width : Int,
-  height : Int,
+  width : Int32,
+  height : Int32,
 ) -> Array[DiffRegion] {
   let size = width * height
   let visited : FixedArray[Bool] = FixedArray::make(size, false)
-  let stack : FixedArray[Int] = FixedArray::make(size, 0)
+  let stack : FixedArray[Int32] = FixedArray::make(size, 0)
   let regions : Array[DiffRegion] = []
   for y in 0..<height {
     for x in 0..<width {
@@ -1263,7 +1276,10 @@ fn find_diff_regions_flat(
             diff_pixels: pixel_count,
             region_type: "",
           }
-          regions.push({ ..region, region_type: classify_region(region, width) })
+          regions.push({
+            ..region,
+            region_type: classify_region(region, width),
+          })
         }
       }
     }
@@ -1429,7 +1445,7 @@ pub fn DiffReport::to_compact(self : DiffReport) -> String {
 ///|
 /// Analyze grid pattern to detect shape hints
 fn detect_shape_hints(
-  grid : Array[Array[Int]],
+  grid : Array[Array[Int32]],
   regions : Array[DiffRegion],
 ) -> Array[String] {
   let hints : Array[String] = []

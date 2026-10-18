@@ -7,7 +7,7 @@ fn image_data_to_image(img : @image.ImageData) -> @pixelmatch.Image {
   for i in 0..<(w * h * 4) {
     data[i] = img.data[i].to_int()
   }
-  { width: w, height: h, data }
+  { width: w, height: h, data, }
 }
 
 ///|
@@ -18,12 +18,18 @@ fn image_to_image_data(img : @pixelmatch.Image) -> @image.ImageData {
   for i in 0..<len {
     buf[i] = img.data[i].to_byte()
   }
-  { width: img.width, height: img.height, data: Bytes::from_array(buf) }
+  { width: img.width, height: img.height, data: Bytes::from_array(buf), }
 }
 
 ///|
 /// Create a test image as ImageData with a solid color
-fn make_solid(w : Int, h : Int, r : Int, g : Int, b : Int) -> @image.ImageData {
+fn make_solid(
+  w : Int32,
+  h : Int32,
+  r : Int32,
+  g : Int32,
+  b : Int32,
+) -> @image.ImageData {
   let len = w * h * 4
   let buf = FixedArray::make(len, b'\x00')
   for i in 0..<(w * h) {
@@ -33,7 +39,7 @@ fn make_solid(w : Int, h : Int, r : Int, g : Int, b : Int) -> @image.ImageData {
     buf[base + 2] = b.to_byte()
     buf[base + 3] = b'\xFF'
   }
-  { width: w, height: h, data: Bytes::from_array(buf) }
+  { width: w, height: h, data: Bytes::from_array(buf), }
 }
 
 ///|
